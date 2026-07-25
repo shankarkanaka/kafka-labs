@@ -1,0 +1,12 @@
+:_mod-docs-content-type: CONCEPT
+
+// This module is included in the following assemblies:
+//
+// assembly-upgrade.adoc
+
+[id='con-api-conversion-v1-{context}']
+= Upgrading from versions earlier than 1.0.0
+
+[role="_abstract"]
+When upgrading from a version earlier than Strimzi 1.0.0, you **must** convert your custom resources and CRDs to the `v1` API.
+For guidance on the conversion, see the link:https://strimzi.io/docs/operators/1.0.0/deploying.html#assembly-api-conversion-str[Strimzi 1.0.0 documentation^].

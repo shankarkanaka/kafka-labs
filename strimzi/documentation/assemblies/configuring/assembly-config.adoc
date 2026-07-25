@@ -1,0 +1,195 @@
+:_mod-docs-content-type: ASSEMBLY
+
+// This assembly is included in the following assemblies:
+//
+// configuring/configuring.adoc
+
+:_mod-docs-content-type: ASSEMBLY
+[id='overview-{context}']
+= Configuring a deployment
+
+[role="_abstract"]
+Configure and manage a Strimzi deployment to your precise needs using Strimzi custom resources.
+Strimzi provides example custom resources with each release, allowing you to configure and create instances of supported Kafka components.
+
+Use custom resources to configure and create instances of the following components:
+
+* Kafka clusters
+* Kafka Connect clusters
+* Kafka MirrorMaker
+* HTTP Bridge
+* Cruise Control
+
+You can use configuration to manage your instances or modify your deployment to introduce additional features.
+New features are sometimes introduced through feature gates, which are controlled through operator configuration.  
+
+The link:{BookURLConfiguring}[Strimzi Custom Resource API Reference^] describes the properties you can use in your configuration.
+
+.Centralizing configuration
+
+For key configuration areas, such as metrics, logging, and external Kafka Connect connector settings, you can centralize management as follows:
+
+* xref:configuration-points-config-maps-str[Using `ConfigMap` resources to incorporate configuration].
+* xref:assembly-loading-config-with-providers-str[Using configuration providers to load configuration from external sources].
+
+We recommend configuration providers for securely supplying Kafka Connect connector credentials.
+
+.TLS certificate management
+
+When deploying Kafka, the Cluster Operator automatically sets up and renews TLS certificates to enable encryption and authentication within your cluster.
+If required, you can manually renew the cluster and clients CA certificates before their renewal period starts.
+You can also replace the keys used by the cluster and clients CA certificates.
+
+For more information, see xref:proc-renewing-ca-certs-manually-{context}[Renewing CA certificates manually] and xref:proc-replacing-private-keys-{context}[Replacing private keys].
+
+NOTE: Labels applied to a custom resource are also applied to the Kubernetes resources making up its cluster.
+This provides a convenient mechanism for resources to be labeled as required.
+
+//How to access examples
+include::../../modules/configuring/con-config-examples.adoc[leveloffset=+1]
+
+//`Kafka` resource core config
+include::../../modules/configuring/con-config-kafka-kraft.adoc[leveloffset=+1]
+// Securing client connections
+include::../../modules/configuring/con-config-kafka-securing-client-connections.adoc[leveloffset=+2]
+// Configuring authorization
+include::../../modules/configuring/con-config-kafka-authorization.adoc[leveloffset=+2]
+// Configuring Kafka broker behavior
+include::../../modules/configuring/con-config-kafka-broker-configuration.adoc[leveloffset=+2]
+// Automating Kafka resource distribution and storage management
+include::../../modules/configuring/con-kafka-cruise-control.adoc[leveloffset=+2]
+// Capturing consumer lag metrics
+include::../../modules/configuring/con-kafka-exporter.adoc[leveloffset=+2]
+// Controlling throughput and storage usage
+include::../../modules/managing/con-choosing-a-quota-plugin.adoc[leveloffset=+2]
+include::../../modules/managing/proc-setting-broker-limits.adoc[leveloffset=+2]
+// Recovering from broker storage issues
+include::../../modules/configuring/con-kafka-recovering-brokers.adoc[leveloffset=+2]
+// Deleting Kafka nodes using annotations
+include::../../modules/configuring/proc-manual-delete-pod-pvc-kafka.adoc[leveloffset=+2]
+
+//configuring node pools
+include::../../modules/configuring/con-config-node-pools.adoc[leveloffset=+1]
+include::../../modules/configuring/proc-managing-node-pools-ids.adoc[leveloffset=+2]
+include::../../modules/configuring/con-node-pools-racks.adoc[leveloffset=+2]
+include::../../modules/configuring/proc-scaling-up-node-pools.adoc[leveloffset=+2]
+include::../../modules/configuring/proc-scaling-down-node-pools.adoc[leveloffset=+2]
+include::../../modules/configuring/proc-moving-node-pools.adoc[leveloffset=+2]
+include::../../modules/configuring/con-config-node-pool-roles.adoc[leveloffset=+2]
+include::../../modules/configuring/proc-splitting-node-pool-roles.adoc[leveloffset=+2]
+include::../../modules/configuring/proc-joining-node-pool-roles.adoc[leveloffset=+2]
+
+//configuring storage
+include::assembly-storage.adoc[leveloffset=+1]
+
+//`Kafka` config for operators
+include::../../modules/configuring/ref-kafka-entity-operator.adoc[leveloffset=+1]
+//topic operator config
+include::../../modules/configuring/con-configuring-topic-operator.adoc[leveloffset=+2]
+//user operator config
+include::../../modules/configuring/con-configuring-user-operator.adoc[leveloffset=+2]
+//watched namespace config for topic and user operators
+include::../../modules/configuring/proc-configuring-entity-operator-watched-namespace.adoc[leveloffset=+2]
+
+//cluster operator config env vars
+include::../../modules/operators/con-configuring-cluster-operator.adoc[leveloffset=+1]
+//pausing reconciliation of custom resources
+include::../../modules/operators/proc-pausing-reconciliation.adoc[leveloffset=+2]
+//enabling leader election
+include::../../assemblies/operators/assembly-using-multiple-cluster-operators.adoc[leveloffset=+2]
+//cluster operator proxy config
+include::../../modules/operators/proc-configuring-proxy-config-cluster-operator.adoc[leveloffset=+2]
+//disabling FIPS mode
+include::../../modules/operators/proc-disabling-fips-mode-cluster-operator.adoc[leveloffset=+2]
+
+// `KafkaConnect` resource core configuration (includes minimal configuration)
+include::../../modules/configuring/con-config-kafka-connect.adoc[leveloffset=+1]
+// Securing Kafka Connect connections (TLS and authentication)
+include::../../modules/configuring/con-config-kafka-connect-securing-connections.adoc[leveloffset=+2]
+// Granting Kafka Connect access to Kafka resources
+include::../../modules/configuring/proc-config-kafka-connect-user-authorization.adoc[leveloffset=+2]
+// Adding connector plugins (building a custom image)
+include::../../modules/configuring/con-config-kafka-connect-build.adoc[leveloffset=+2]
+// Tuning Kafka Connect worker settings
+include::../../modules/configuring/con-config-kafka-connect-worker-settings.adoc[leveloffset=+2]
+// Running multiple Kafka Connect instances against the same Kafka cluster
+include::../../modules/configuring/con-config-kafka-connect-multiple-instances.adoc[leveloffset=+2]
+
+//`KafkaConnector` resource config
+include::../../modules/configuring/con-config-kafka-connector.adoc[leveloffset=+1]
+//Procedure to manually pause or stop a Kafka connector
+include::../../modules/configuring/proc-manual-stop-pause-connector.adoc[leveloffset=+2]
+//Procedure to manually restart a Kafka connector
+include::../../modules/configuring/proc-manual-restart-connector.adoc[leveloffset=+2]
+//Procedure to manually restart a Kafka connector task
+include::../../modules/configuring/proc-manual-restart-connector-task.adoc[leveloffset=+2]
+//procedure to list offsets
+include::../../modules/configuring/proc-listing-connector-offsets.adoc[leveloffset=+2]
+//procedure to alter offsets
+include::../../modules/configuring/proc-altering-connector-offsets.adoc[leveloffset=+2]
+//procedure to reset offsets
+include::../../modules/configuring/proc-resetting-connector-offsets.adoc[leveloffset=+2]
+
+//`KafkaMirrorMaker2` core resource config
+include::../../modules/configuring/con-config-mirrormaker2.adoc[leveloffset=+1]
+//MirrorMaker securing connections
+include::../../modules/configuring/proc-config-mirrormaker2-securing-connection.adoc[leveloffset=+2]
+//MirrorMaker naming
+include::../../modules/configuring/con-config-mirrormaker2-topic-names.adoc[leveloffset=+2]
+//MirrorMaker sync offset config
+include::../../modules/configuring/con-config-mirrormaker2-sync.adoc[leveloffset=+2]
+//MirrorMaker sync acls config
+include::../../modules/configuring/con-config-mirrormaker2-sync-acls.adoc[leveloffset=+2]
+//MirrorMaker filters
+include::../../modules/configuring/con-config-mirrormaker2-connect-workers.adoc[leveloffset=+2]
+//Running multiple instances
+include::../../modules/configuring/con-config-mm2-multiple-instances.adoc[leveloffset=+2]
+//Disaster recovery 
+include::../../modules/configuring/con-mm2-recovery.adoc[leveloffset=+2]
+
+//configuring MM2 connectors
+include::../../modules/configuring/con-config-mirrormaker2-connectors.adoc[leveloffset=+1]
+//increasing the number of tasks
+include::../../modules/configuring/con-config-mirrormaker2-tasks-max.adoc[leveloffset=+2]
+//Procedure to manually pause or stop an MM2 connector
+include::../../modules/configuring/proc-manual-stop-pause-mirrormaker2-connector.adoc[leveloffset=+2]
+//Procedure to restart an MM2 connector
+include::../../modules/configuring/proc-manual-restart-mirrormaker2-connector.adoc[leveloffset=+2]
+//Procedure to restart an MM2 connector task
+include::../../modules/configuring/proc-manual-restart-mirrormaker2-connector-task.adoc[leveloffset=+2]
+//configuring MM2 connector producers and consumers
+include::../../modules/configuring/con-config-mirrormaker2-producers-consumers.adoc[leveloffset=+2]
+
+// `KafkaBridge` resource core configuration (includes minimal configuration)
+include::../../modules/configuring/con-config-http-bridge.adoc[leveloffset=+1]
+// Securing connections to Kafka (TLS and authentication)
+include::../../modules/configuring/con-config-http-bridge-securing-connections.adoc[leveloffset=+2]
+// Granting the HTTP Bridge access to Kafka resources
+include::../../modules/configuring/proc-config-http-bridge-user-authorization.adoc[leveloffset=+2]
+// Configuring HTTP endpoints (port, CORS, and related HTTP settings)
+include::../../modules/configuring/con-config-http-bridge-http-endpoints.adoc[leveloffset=+2]
+// Tuning consumer and producer settings
+include::../../modules/configuring/con-config-http-bridge-client-settings.adoc[leveloffset=+2]
+// Tuning internal bridge configuration
+include::../../modules/configuring/con-config-http-bridge-settings.adoc[leveloffset=+2]
+// Running multiple HTTP Bridge instances
+include::../../modules/configuring/con-config-http-bridge-multiple-instances.adoc[leveloffset=+2]
+
+//common config examples
+include::../../modules/configuring/con-common-configuration.adoc[leveloffset=+1]
+//scheduling separate Kafka pods 
+include::assembly-scheduling.adoc[leveloffset=+2]
+//disabling pod disruption budgets
+include::../../modules/configuring/proc-disable-pod-disruption-budget-generation.adoc[leveloffset=+2]
+//loading configuration from configmaps for certain types of data
+include::../../modules/configuring/con-configuration-points-configmaps.adoc[leveloffset=+2]
+//loading configuration from external sources for all Kafka components
+include::assembly-external-config.adoc[leveloffset=+2]
+//customizing Kubernetes resources like Deployment etc
+include::assembly-customizing-kubernetes-resources.adoc[leveloffset=+2]
+
+//configuring logs
+include::assembly-logging-configuration.adoc[leveloffset=+1]
+
+//Kubernetes labels
+include::../../modules/configuring/ref-kubernetes-labels.adoc[leveloffset=+1]

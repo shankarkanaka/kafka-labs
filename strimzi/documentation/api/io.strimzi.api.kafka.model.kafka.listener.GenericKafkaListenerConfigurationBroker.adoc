@@ -1,0 +1,65 @@
+:_mod-docs-content-type: CONCEPT
+
+Configures broker settings for listeners.
+
+Example configuration for the `host`, `nodePort`, `loadBalancerIP`, and `annotations` properties is shown in the xref:type-GenericKafkaListenerConfiguration-reference[`GenericKafkaListenerConfiguration` schema] section.
+
+[id='property-listener-config-broker-{context}']
+= Overriding advertised addresses for brokers
+
+By default, Strimzi tries to automatically determine the hostnames and ports that your Kafka cluster advertises to its clients.
+This is not sufficient in all situations, because the infrastructure on which Strimzi is running might not provide the right hostname or port through which Kafka can be accessed.
+
+You can specify a broker ID and customize the advertised hostname and port in the `configuration` property of the listener.
+Strimzi will then automatically configure the advertised address in the Kafka brokers and add it to the broker certificates so it can be used for TLS hostname verification.
+Overriding the advertised host and ports is available for all types of listeners.
+
+.Example of an external `route` listener configured with overrides for advertised addresses
+[source,yaml,subs="attributes+"]
+----
+listeners:
+  #...
+  - name: external1
+    port: 9094
+    type: route
+    tls: true
+    configuration:
+      brokers:
+      - broker: 0
+        advertisedHost: example.hostname.0
+        advertisedPort: 12340
+      - broker: 1
+        advertisedHost: example.hostname.1
+        advertisedPort: 12341
+      - broker: 2
+        advertisedHost: example.hostname.2
+        advertisedPort: 12342
+# ...
+----
+
+Instead of specifying the `advertisedHost` and `advertisedPort` fields for every broker, you can also use an `advertisedHostTemplate` and `advertisedPortTemplate` to generate them automatically.
+
+The `advertisedHostTemplate` supports the following variables which are replaced with the actual values when the configuration is applied to the Kafka cluster:
+
+* The `{nodeId}` variable is replaced with the ID of the Kafka node to which the template is applied.
+* The `{nodePodName}` variable is replaced with the Kubernetes pod name for the Kafka node where the template is applied.
+
+The `advertisedPortTemplate` works as a simple mathematical formula where you can use the `{nodeId}` variable to calculate the port number for each broker.
+The supported operations are addition (`+`), subtraction (`-`), multiplication (`*`), and brackets (`(`, `)`).
+For example, if you set `advertisedPortTemplate` to `12340 + {nodeId}`, the broker with the node ID `0` will have the advertised port `12340`, the broker with node ID `2` will have advertised port `12342`, and so on.
+You can also set `advertisedPortTemplate` to a simple number without using the `nodeId` variable, in which case all brokers will have the same advertised port.
+
+.Example `route` listener with `advertisedHostTemplate` configuration
+[source,yaml,subs="attributes+"]
+----
+listeners:
+  #...
+  - name: external1
+    port: 9094
+    type: route
+    tls: true
+    configuration:
+      advertisedHostTemplate: example.hostname.{nodeId}
+      advertisedPortTemplate: 12340 + {nodeId}
+# ...
+----

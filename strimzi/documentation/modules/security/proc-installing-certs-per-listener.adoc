@@ -1,0 +1,107 @@
+:_mod-docs-content-type: PROCEDURE
+
+// Module included in the following assemblies:
+//
+// assembly-securing-kafka.adoc
+
+[id='proc-installing-certs-per-listener-{context}']
+= Using custom listener certificates for TLS encryption
+
+[role="_abstract"]
+This procedure shows how to configure custom server certificates for TLS listeners or external listeners which have TLS encryption enabled.
+
+By default, Kafka listeners use certificates signed by Strimzi's internal CA (certificate authority).
+The Cluster Operator automatically generates a CA certificate when creating a Kafka cluster.
+To configure a client for TLS, the CA certificate is included in its truststore configuration to authenticate the Kafka cluster.
+Alternatively, you have the option to xref:installing-your-own-ca-certificates-str[install and use your own CA certificates].
+
+However, if you prefer more granular control by using your own custom certificates at the listener-level, you can configure listeners using `brokerCertChainAndKey` properties.
+You create a secret with your own private key and server certificate, then specify them in the `brokerCertChainAndKey` configuration.
+
+User-provided certificates allow you to leverage existing security infrastructure.
+You can use a certificate signed by a public (external) CA or a private CA.
+Kafka clients need to trust the CA which was used to sign the listener certificate.
+If signed by a public CA, you usually won't need to add it to a client's truststore configuration.  
+
+Custom certificates are not managed by Strimzi, so you need to renew them manually. 
+
+NOTE: Listener certificates are used for TLS encryption and server authentication only.
+They are not used for TLS client authentication.
+If you want to use your own certificate for TLS client authentication as well, you must xref:installing-your-own-ca-certificates-str[install and use your own clients CA]. 
+
+.Prerequisites
+
+* The Cluster Operator is running.
+* Each listener requires the following:
+** A compatible server certificate signed by an external CA. (Provide an X.509 certificate in PEM format.)
++
+You can use one listener certificate for multiple listeners.
+** Subject Alternative Names (SANs) are specified in the certificate for each listener.
+For more information, see xref:ref-alternative-subjects-certs-for-listeners-{context}[].
+
+If you are not using a self-signed certificate, you can provide a certificate that includes the whole CA chain in the certificate.
+
+You can only use the `brokerCertChainAndKey` properties if TLS encryption (`tls: true`) is configured for the listener.
+
+NOTE: Strimzi does not support the use of encrypted private keys for TLS. The private key stored in the secret must be unencrypted for this to work.
+
+.Procedure
+
+. Create a `Secret` containing your private key and server certificate:
++
+[source,shell]
+----
+kubectl create secret generic <my_secret> --from-file=<my_listener_key.key> --from-file=<my_listener_certificate.crt>
+----
+
+. Edit the `Kafka` resource for your cluster. 
++
+Configure the listener to use your `Secret`, certificate file, and private key file in the `configuration.brokerCertChainAndKey` property.
++
+.Example configuration for a `loadbalancer` external listener with TLS encryption enabled
+[source,yaml,subs="attributes+"]
+----
+# ...
+listeners:
+  - name: plain
+    port: 9092
+    type: internal
+    tls: false
+  - name: external3
+    port: 9094
+    type: loadbalancer
+    tls: true
+    configuration:
+      brokerCertChainAndKey:
+        secretName: my-secret
+        certificate: my-listener-certificate.crt
+        key: my-listener-key.key
+# ...
+----
++
+.Example configuration for a TLS listener
+[source,yaml,subs="attributes+"]
+----
+# ...
+listeners:
+  - name: plain
+    port: 9092
+    type: internal
+    tls: false
+  - name: tls
+    port: 9093
+    type: internal
+    tls: true
+    configuration:
+      brokerCertChainAndKey:
+        secretName: my-secret
+        certificate: my-listener-certificate.crt
+        key: my-listener-key.key
+# ...
+----
+
+. Apply the changes to the `Kafka` resource configuration.
++
+The Cluster Operator starts a rolling update of the Kafka cluster, which updates the configuration of the listeners.
++
+NOTE: A rolling update is also started if you update a Kafka listener certificate in a `Secret` that is already used by a listener.

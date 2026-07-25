@@ -1,0 +1,26 @@
+:_mod-docs-content-type: CONCEPT
+
+// Module included in the following assemblies:
+//
+// deploying/assembly_deploy-tasks-prep.adoc
+
+[id='downloads-{context}']
+= Downloading deployment files
+
+[role="_abstract"]
+To deploy Strimzi components using YAML files, download and extract the latest release archive (`{ReleaseFile}`) from the {ReleaseDownload}.
+
+The release archive contains sample YAML files for deploying Strimzi components to Kubernetes using `kubectl`. 
+
+Begin by deploying the Cluster Operator from the `install/cluster-operator` directory to watch a single namespace, multiple namespaces, or all namespaces.
+
+In the `install` folder, you can also deploy other Strimzi components, including: 
+
+* Strimzi administrator roles (`strimzi-admin`) 
+* Standalone Topic Operator (`topic-operator`) 
+* Standalone User Operator (`user-operator`)
+* Strimzi Drain Cleaner (`drain-cleaner`)
+
+The `examples` folder xref:config-examples-str[provides examples of Strimzi custom resources] to help you develop your own Kafka configurations.
+
+NOTE: Strimzi container images are available through the {DockerRepository}, but we recommend using the provided YAML files for deployment.

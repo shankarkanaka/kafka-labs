@@ -1,0 +1,70 @@
+:_mod-docs-content-type: CONCEPT
+
+// Module included in the following assemblies:
+//
+// assembly-maintenance-time-windows.adoc
+
+[id='con-maintenance-time-window-definition-{context}']
+= Scheduling maintenance time windows
+
+[role="_abstract"]
+Use maintenance time windows to control when the Cluster Operator performs certificate renewals and the related rolling restarts.
+This helps minimize disruption to Kafka clients by scheduling updates at convenient times.
+
+Maintenance time windows apply only to automatic certificate renewals and rolling restarts managed by the Cluster Operator.
+
+They **apply** in the following scenarios:
+
+* Automatic time-based renewal of Strimzi-managed internal certificates, such as those used by Kafka nodes.
+* Automatic time-based renewal of server certificates signed by a custom Certificate Authority (CA), _if_ Strimzi manages the renewal process based on certificate expiry.
+
+They **do not apply** in the following scenarios:
+
+* User-driven changes to the `Kafka` custom resource, including configuration updates.
+* Environment-driven changes to certificate fields, such as the Common Name (CN) or Subject Alternative Names (SANs). For example, when a new load balancer address is introduced.
+* Manual updates to Cluster CA or Clients CA certificates, even if they are Strimzi-managed, since these updates are treated as user-initiated actions.
+* Externally managed certificates, such as:
+** Custom listener certificates provided directly by the user.
+** Certificates issued by an external certificate manager.
+
+In these cases, restarts may occur immediately and outside any configured maintenance time window.
+
+Use time windows in conjunction with the xref:con-certificate-renewal-str[renewal periods for CA certificates] set in the `Kafka` resource (`Kafka.spec.clusterCa.renewalDays` and `Kafka.spec.clientsCa.renewalDays`).
+
+Rolling restarts can be triggered in two ways:
+
+* By user-driven changes to the `Kafka` custom resource
+* Automatically, when Cluster Operator-managed certificates near expiration
+
+User-driven restarts are not restricted by maintenance time windows. 
+However, automatically triggered restarts for expiring certificates are subject to the configured maintenance windows.
+
+Although restarts typically do not affect service availability, they can temporarily impact client performance. 
+Use maintenance time windows to schedule automatic restarts occur during periods of low client activity.
+
+Configure maintenance time windows as follows:
+
+* Configure an array of strings using the `Kafka.spec.maintenanceTimeWindows` property of the `Kafka` resource.
+* Each string is a {CronExpression} interpreted as being in UTC (Coordinated Universal Time)
+
+The following example configures a single maintenance time window that starts at midnight and ends at 01:59am (UTC), on Sundays, Mondays, Tuesdays, Wednesdays, and Thursdays.
+
+.Example maintenance time window configuration
+[source,yaml,subs=attributes+]
+----
+apiVersion: {KafkaApiVersion}
+kind: Kafka
+metadata:
+  name: my-cluster
+spec:
+  kafka:
+    #...
+  maintenanceTimeWindows:
+    - "* * 0-1 ? * SUN,MON,TUE,WED,THU *"
+  #...
+----
+
+NOTE: The Cluster Operator doesn't adhere strictly to the time windows. 
+Maintenance operations are triggered by the first reconciliation that occurs within the specified time window. 
+If the time window is shorter than the interval between reconciliations, there's a risk that the reconciliation may happen outside of the time window, 
+Therefore, maintenance time windows must be at least as long as the interval between reconciliations.

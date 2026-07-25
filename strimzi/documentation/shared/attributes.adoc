@@ -1,0 +1,214 @@
+// AsciiDoc settings
+:data-uri!:
+:doctype: book
+:experimental:
+:idprefix:
+:imagesdir: images
+:numbered:
+:sectanchors!:
+:sectlinks:
+:sectnums:
+:source-highlighter: highlightjs
+:toc: left
+:linkattrs:
+:toclevels: 2
+
+//Latest Strimzi version
+:ProductVersion: 1.1.0
+:ProductVersionPrevious: 1.0.1
+
+// Kubernetes versions
+:KubernetesVersion: 1.30 and later
+
+// Kafka upgrade attributes used in kafka upgrades section
+:DefaultKafkaVersion: 4.3.0
+:DefaultKafkaMetadataVersion: 4.3
+:KafkaMetadataVersionLower: 4.2-IV1
+:KafkaMetadataVersionHigher: 4.3-IV0
+:KafkaVersionLower: 4.2.0
+:KafkaVersionHigher: 4.3.0
+:ExampleImageTagUpgrades: quay.io/strimzi/kafka:{ProductVersion}-kafka-{KafkaVersionHigher}
+
+// Bridge version
+:BridgeVersion: 1.0.0
+
+// Drain Cleaner Version
+:DrainCleanerVersion: 1.6.0
+
+// Source and download links
+:ReleaseDownload: https://github.com/strimzi/strimzi-kafka-operator/releases[GitHub releases page^]
+:ReleaseFile: strimzi-{ProductVersion}.*
+:supported-configurations: https://strimzi.io/downloads/
+
+//Monitoring links
+:GrafanaHome: link:https://grafana.com/[Grafana Labs^]
+:JMXExporter: link:https://github.com/prometheus/jmx_exporter[Prometheus JMX Exporter^]
+:StrimziMetricsReporter: link:https://github.com/strimzi/metrics-reporter[Strimzi Metrics Reporter^]
+:PrometheusHome: link:https://github.com/prometheus[Prometheus^]
+:PrometheusConfig: link:https://prometheus.io/docs/prometheus/latest/configuration/configuration[Prometheus configuration^]
+:kafka-exporter-project: link:https://github.com/danielqsj/kafka_exporter[Kafka Exporter^]
+
+//OAuth attributes and links
+:keycloak-docs: link:https://www.keycloak.org/documentation[Keycloak documentation^]
+:oauth-project: link:https://github.com/strimzi/strimzi-kafka-oauth[Strimzi OAuth project documentation^]
+
+// -----------------------------------------------------------------------------
+// Apache Kafka links
+// -----------------------------------------------------------------------------
+
+// Apache Kafka documentation links (versioned)
+// Add an attribute here only if the link target is used more than once.
+// For single-use links, use {ApacheKafkaDocsBase} directly and define the link text inline.
+:ApacheKafkaDocsVersion: 41
+:ApacheKafkaDocsBase: https://kafka.apache.org/{ApacheKafkaDocsVersion}/
+:ApacheKafkaHome: link:https://kafka.apache.org/[Apache Kafka^]
+:kafkaDoc: link:{ApacheKafkaDocsBase}[Apache Kafka documentation^]
+:ApacheKafkaConsumerConfig: link:{ApacheKafkaDocsBase}configuration/consumer-configs/[Apache Kafka configuration documentation for consumers^]
+:ApacheKafkaProducerConfig: link:{ApacheKafkaDocsBase}configuration/producer-configs/[Apache Kafka configuration documentation for producers^]
+:ApacheKafkaTieredStorageLimitations: link:{ApacheKafkaDocsBase}operations/tiered-storage/#limitations[known limitations^]
+
+//Apache logging services
+:ApacheLoggers: link:https://logging.apache.org/[Apache logging services^]
+
+// -----------------------------------------------------------------------------
+// External links
+// -----------------------------------------------------------------------------
+
+// Java and CLI tools
+:JavaServiceProvider: link:https://www.baeldung.com/java-spi[Java Service Provider Interface^]
+:JQTool: link:https://github.com/jqlang/jq[command line JSON parser tool^]
+:MavenCentral: https://mvnrepository.com/repos/central[Maven Central repository^]
+:CronExpression: link:https://www.quartz-scheduler.org/documentation/quartz-2.3.0/tutorials/tutorial-lesson-06.html[cron expression^]
+
+// Kubernetes containers and images
+:K8sImagePullPolicies: link:https://kubernetes.io/docs/concepts/containers/images/#updating-images[Updating images^]
+
+// Kubernetes documentation
+:kubernetes-docs: link:https://kubernetes.io/docs/home/[Kubernetes documentation^]
+:KubeTools: link:https://kubernetes.io/docs/tasks/tools/[Install Tools^]
+
+// Kubernetes scheduling and placement
+:K8sAffinity: link:https://kubernetes.io/docs/concepts/configuration/assign-pod-node/[Kubernetes node and pod affinity documentation^]
+:K8sTolerations: link:https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/[Kubernetes taints and tolerations^]
+:K8sTopologySpreadConstraints: link:https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/[Kubernetes Topology Spread Constraints^]
+
+// Kubernetes storage
+:K8sEmptyDir: link:https://kubernetes.io/docs/concepts/storage/volumes/#emptydir[emptyDir^]
+:K8sPersistentVolumeClaims: link:https://kubernetes.io/docs/concepts/storage/dynamic-provisioning/[Persistent Volume Claims^]
+:K8sLocalPersistentVolumes: link:https://kubernetes.io/docs/concepts/storage/volumes/#local[local persistent volumes^]
+:K8SStorageClass: link:https://kubernetes.io/docs/concepts/storage/storage-classes/[StorageClass^]
+:K8sResizingPersistentVolumesUsingKubernetes: link:https://kubernetes.io/blog/2018/07/12/resizing-persistent-volumes-using-kubernetes/[Resizing Persistent Volumes using Kubernetes^]
+
+// Kubernetes configuration and resources
+:K8sDownwardAPI: link:https://kubernetes.io/docs/tasks/inject-data-application/downward-api-volume-expose-pod-information/#the-downward-api[Downward API^]
+:K8SJsonPath: link:https://kubernetes.io/docs/reference/kubectl/jsonpath/[JSONPath support^]
+:K8sCRDs: link:https://kubernetes.io/docs/tasks/access-kubernetes-api/custom-resources/custom-resource-definitions/[Extend the Kubernetes API with CustomResourceDefinitions^]
+:HelmCustomResourceDefinitions: link:https://helm.sh/docs/chart_best_practices/custom_resource_definitions/[Custom Resource Definitions for Helm^]
+
+// Kubernetes compute and health
+:K8sMeaningOfCpu: link:https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/#meaning-of-cpu[Meaning of CPU^]
+:K8sMeaningOfMemory: link:https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/#meaning-of-memory[Meaning of memory^]
+:K8sManagingComputingResources: link:https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/[Managing Compute Resources for Containers^]
+:K8sLivenessReadinessProbes: link:https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/[Configure Liveness and Readiness Probes^]
+
+// Kubernetes networking and security
+:K8sNetworkPolicyPeerAPI: link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.30/#networkpolicypeer-v1-networking-k8s-io[NetworkPolicyPeer API reference^]
+:K8sServiceDiscovery: link:https://kubernetes.io/docs/concepts/services-networking/service/#discovering-services[Discovering services^]
+:K8sSecurityContext: link:https://kubernetes.io/docs/tasks/configure-pod-container/security-context/[Security context^]
+:K8sSecurityStandards: link:https://kubernetes.io/docs/concepts/security/pod-security-standards/[Pod security standards^]
+:K8sWellKnownLabelsAnnotationsAndTaints: link:https://kubernetes.io/docs/reference/kubernetes-api/labels-annotations-taints/[Well-Known Labels, Annotations and Taints^]
+:K8sZoneLabel: link:https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone[topology.kubernetes.io/zone^]
+:K8sDockerSecret: link:https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/#registry-secret-existing-credentials[Create a Secret based on existing Docker credentials^]
+
+// Ingress and DNS
+:NginxIngressController: link:https://github.com/kubernetes/ingress-nginx[Ingress NGINX Controller for Kubernetes^]
+:NginxIngressControllerTLSPassthrough: link:https://kubernetes.github.io/ingress-nginx/user-guide/tls/#ssl-passthrough[TLS passthrough documentation^]
+:KubernetesExternalDNS: link:https://github.com/kubernetes-incubator/external-dns[External DNS^]
+
+// Cruise Control
+:CruiseControlProject: https://github.com/linkedin/cruise-control[Cruise Control^]
+:CruiseControlConfigDocs: link:https://github.com/linkedin/cruise-control/wiki/Configurations[Cruise Control documentation^]
+:CruiseControlSensorsDocs: link:https://github.com/linkedin/cruise-control/wiki/Sensors[Cruise Control documentation^]
+:CruiseControlApiDocs: https://github.com/linkedin/cruise-control/wiki/REST-APIs[REST APIs in the Cruise Control Wiki^]
+
+// Operators and platform services
+:OperatorHub: link:https://operatorhub.io/operator/strimzi-kafka-operator[OperatorHub.io^]
+:OperatorLifecycleManager: link:https://github.com/operator-framework/operator-lifecycle-manager[Operator Lifecycle Manager^]
+:OLMOperatorDocs: link:https://olm.operatorframework.io/docs/[Operator Lifecycle Manager documentation^]
+
+// Security, policy, and specs
+:external-cors-link: link:https://fetch.spec.whatwg.org/[Fetch CORS specification^]
+
+// Certificate management
+:CertManagerProject: link:https://cert-manager.io/docs/[cert-manager project^]
+:CertManagerPrivateKeyEncoding: link:https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.PrivateKeyEncoding[key encoding^]
+
+// -----------------------------------------------------------------------------
+
+//distributed tracing versions and links
+:OpenTelemetryVersion: 1.63.0
+:OpenTelemetryInstrumentationVersion: 1.32.0-alpha
+:OpenTelemetrySemConvVersion: 1.21.0-alpha
+:OpenTelemetryKafkaClientVersion: 2.6
+:GRPCVersion: 1.79.0
+
+:OpenTelemetry: link:https://opentelemetry.io[OpenTelemetry^]
+:OpenTelemetryDocs: link:https://opentelemetry.io/docs/[OpenTelemetry documentation^]
+:JaegerDocs: link:https://www.jaegertracing.io/docs/[Jaeger documentation^]
+
+//strimzi github links
+:PodSecurityInterface: link:https://github.com/strimzi/strimzi-kafka-operator/blob/main/api/src/main/java/io/strimzi/plugin/security/profiles/PodSecurityProvider.java[Pod security provider interface^]
+:PodSecurityProviders: link:https://github.com/strimzi/strimzi-kafka-operator/tree/main/api/src/main/java/io/strimzi/plugin/security/profiles/impl[Baseline Provider and Restricted Provider classes^]
+:PodSecurityProvidersConfig: link:https://github.com/strimzi/strimzi-kafka-operator/blob/main/api/src/main/resources/META-INF/services/io.strimzi.plugin.security.profiles.PodSecurityProvider[Provider configuration file^]
+
+//OpenShift documentation
+:OpenShiftDocs: link:https://docs.redhat.com/en/documentation/openshift_container_platform/[OpenShift documentation^]
+
+// Container image names and repositories
+:DockerOrg: quay.io/strimzi
+:DockerTag: {ProductVersion}
+:BridgeDockerTag: {BridgeVersion}
+:DrainCleanerDockerTag: {DrainCleanerVersion}
+:DockerRepository: https://quay.io/organization/strimzi[Container Registry^]
+:DockerKafkaImageCurrent: quay.io/strimzi/kafka:{DockerTag}-kafka-{KafkaVersionHigher}
+:DockerKafkaImagePrevious: quay.io/strimzi/kafka:{DockerTag}-kafka-{KafkaVersionLower}
+:DockerKafka: quay.io/strimzi/kafka:{DockerTag}-kafka-{DefaultKafkaVersion}
+:DockerKafkaConnect: quay.io/strimzi/kafka:{DockerTag}-kafka-{DefaultKafkaVersion}
+:DockerClusterOperator: quay.io/strimzi/operator:{DockerTag}
+:DockerKafkaInit: quay.io/strimzi/operator:{DockerTag}
+:DockerTopicOperator: quay.io/strimzi/operator:{DockerTag}
+:DockerUserOperator: quay.io/strimzi/operator:{DockerTag}
+:DockerKafkaBridge: quay.io/strimzi/kafka-bridge:{BridgeDockerTag}
+
+:DockerImageUser: 1001
+
+// API Versions current
+:ApiVersion: v1
+:KafkaApiVersion: kafka.strimzi.io/v1
+:KafkaNodePoolApiVersion: kafka.strimzi.io/v1
+:KafkaConnectApiVersion: kafka.strimzi.io/v1
+:KafkaConnectorApiVersion: kafka.strimzi.io/v1
+:KafkaTopicApiVersion: kafka.strimzi.io/v1
+:KafkaUserApiVersion: kafka.strimzi.io/v1
+:KafkaMirrorMaker2ApiVersion: kafka.strimzi.io/v1
+:KafkaRebalanceApiVersion: kafka.strimzi.io/v1
+:KafkaBridgeApiVersion: kafka.strimzi.io/v1
+
+// Section enablers
+:Section:
+
+// Helm Chart - deploy cluster operator
+:ChartReleaseCoordinate: strimzi/strimzi-kafka-operator
+:ChartRepositoryUrl: https://strimzi.io/charts/
+
+// Links to other Strimzi documentation books
+:BookURLDeploying: ./deploying.html
+:BookURLConfiguring: ./configuring.html
+:BookURLOverview: ./overview.html
+:BookURLBridge: https://strimzi.io/docs/bridge/latest/
+:DocArchive: https://strimzi.io/documentation/archive/
+:MigratingKraft: https://strimzi.io/docs/operators/0.45.1/deploying#proc-deploy-migrate-kraft-str[Migrating to KRaft mode^]
+
+// Link to resource on https://github.com/strimzi/strimzi-kafka-operator
+// Default `main`, specific version overriden when building the docs by `make`
+:GithubVersion: main

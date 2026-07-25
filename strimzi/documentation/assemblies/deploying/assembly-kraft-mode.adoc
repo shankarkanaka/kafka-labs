@@ -1,0 +1,109 @@
+:_mod-docs-content-type: ASSEMBLY
+
+// This assembly is included in the following assemblies:
+//
+// deploying/assembly-deploy-kafka-cluster.adoc
+
+[id='assembly-kraft-mode-{context}']
+= Using Kafka in KRaft mode
+
+[role="_abstract"]
+KRaft (Kafka Raft metadata) mode replaces Kafka's dependency on ZooKeeper for cluster management. 
+KRaft mode simplifies the deployment and management of Kafka clusters by bringing metadata management and coordination of clusters into Kafka.
+
+Kafka in KRaft mode is designed to offer enhanced reliability, scalability, and throughput.
+Metadata operations become more efficient as they are directly integrated.
+And by removing the need to maintain a ZooKeeper cluster, there's also a reduction in the operational and security overhead.
+
+To deploy a Kafka cluster in KRaft mode, you must use `Kafka` and `KafkaNodePool` custom resources.
+For more details and examples, see xref:deploying-kafka-cluster-kraft-{context}[].
+
+Through xref:config-node-pools-{context}[node pool configuration using `KafkaNodePool` resources], nodes are assigned the role of broker, controller, or both:
+
+* *Controller* nodes operate in the control plane to manage cluster metadata and the state of the cluster using a Raft-based consensus protocol.
+* *Broker* nodes operate in the data plane to manage the streaming of messages, receiving and storing data in topic partitions.
+* *Dual-role* nodes fulfill the responsibilities of controllers and brokers.
+
+Controllers use a metadata log, stored as a single-partition topic (`__cluster_metadata`) on every node, which records the state of the cluster. 
+When requests are made to change the cluster configuration, an active (lead) controller manages updates to the metadata log, and follower controllers replicate these updates. 
+The metadata log stores information on brokers, replicas, topics, and partitions, including the state of in-sync replicas and partition leadership. 
+Kafka uses this metadata to coordinate changes and manage the cluster effectively.
+
+Broker nodes act as observers, storing the metadata log passively to stay up-to-date with the cluster's state.
+Each node fetches updates to the log independently.
+If you are using JBOD storage, you can xref:con-storing-metadata-log-{context}[change the volume that stores the metadata log]. 
+
+NOTE: The KRaft metadata version used in the Kafka cluster must be supported by the Kafka version in use. 
+Both versions are managed through the `Kafka` resource configuration.
+For more information, see xref:con-config-kafka-kraft-{context}[].
+
+In the following example, a Kafka cluster comprises a quorum of controller and broker nodes for fault tolerance and high availability. 
+
+.Example cluster with separate broker and controller nodes
+image::kraft-single-role-quorum.png[KRaft quorums for broker and controller]
+
+In a typical production environment, use dedicated broker and controller nodes. 
+However, you might want to use nodes in a dual-role configuration for development or testing.
+
+You can use a combination of nodes that combine roles with nodes that perform a single role.
+In the following example, three nodes perform a dual role and two nodes act only as brokers. 
+
+.Example cluster with dual-role nodes and dedicated broker nodes
+image::kraft-dual-role-quorum.png[KRaft cluster with nodes that combine roles]
+
+== KRaft limitations
+
+KRaft limitations primarily relate to controller scaling, which impacts cluster operations.
+
+=== Controller scaling
+
+KRaft mode supports two types of controller quorums:
+
+* *Static controller quorums* +
+In this mode, the number of controllers is fixed, and scaling requires downtime.
+* *Dynamic controller quorums* +
+This mode enables dynamic scaling of controllers without downtime. 
+New controllers join as observers, replicate the metadata log, and eventually become eligible to join the quorum.
+If a controller being removed is the active controller, it will step down from the quorum only after the new quorum is confirmed. 
+
+Scaling is useful not only for adding or removing controllers, but supports the following operations:
+
+* Renaming a node pool, which involves adding a new node pool with the desired name and deleting the old one.
+* Changing non-JBOD storage, which requires creating a new node pool with the updated storage configuration and removing the old one.
+
+Dynamic controller quorums provide the flexibility to make these operations significantly easier to perform.
+
+=== Limitations with static controller quorums
+
+Migration between static and dynamic controller quorums is not currently supported by Apache Kafka, though it is expected to be introduced in a future release.
+As a result, Strimzi uses static controller quorums for all deployments, including new installations.
+All pre-existing KRaft-based Apache Kafka clusters that use static controller quorums must continue using them. 
+To ensure compatibility with existing KRaft-based clusters, Strimzi continues to use static controller quorums as well.
+
+This limitation means dynamic scaling of controller quorums cannot be used to support the following:
+
+* Adding or removing node pools with controller roles
+* Adding the controller role to an existing node pool
+* Removing the controller role from an existing node pool
+* Scaling a node pool with the controller role
+* Renaming a node pool with the controller role
+
+Static controller quorums also limit operations that require scaling. 
+For example, changing the storage type for a node pool with a controller role is not possible because it involves scaling the controller quorum. 
+For non-JBOD storage, creating a new node pool with the desired storage type, adding it to the cluster, and removing the old one would require scaling operations, which are not supported. 
+In some cases, workarounds are possible.
+For instance, when modifying node pool roles to combine controller and broker functions, you can xref:proc-joining-node-pools-roles-str[add broker roles to controller nodes] instead of adding controller roles to broker nodes to avoid controller scaling. 
+However, this approach would require reassigning more data, which may temporarily affect cluster performance.
+
+Once migration is possible, Strimzi plans to assess introducing support for dynamic quorums.
+
+== Migrating ZooKeeper-based Kafka clusters
+
+Kafka 4.0 runs exclusively in KRaft mode, with no ZooKeeper integration.  
+As a result of this change, Strimzi removed support for ZooKeeper-based Kafka clusters starting with version 0.46.
+
+To upgrade to Strimzi 0.46 or later, first migrate any ZooKeeper-based Kafka clusters to KRaft mode.
+
+**NOTE:** To perform the migration before upgrading, follow the procedure outlined in the Strimzi 0.45.x documentation.  
+For more information, see {MigratingKraft}.
+

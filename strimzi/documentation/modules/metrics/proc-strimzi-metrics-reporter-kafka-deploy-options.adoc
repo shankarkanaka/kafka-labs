@@ -1,0 +1,82 @@
+:_mod-docs-content-type: PROCEDURE
+
+// This assembly is included in the following assemblies:
+//
+// metrics/assembly_metrics-prometheus-setup.adoc
+
+[id='proc-metrics-reporter-kafka-deploy-options-{context}']
+= Enabling Strimzi Metrics Reporter
+
+[role="_abstract"]
+To enable and expose metrics in Strimzi for Prometheus, configure the appropriate properties in the custom resources for the components you want to monitor.
+
+Use `metricsConfig` configuration to expose metrics for these components:
+
+* Kafka
+* HTTP Bridge
+* Kafka Connect
+* Kafka MirrorMaker 2
+
+This enables the {StrimziMetricsReporter}, which exposes metrics on port 9404 through an HTTP endpoint.
+Prometheus scrapes this endpoint to collect Kafka metrics.
+
+You can create your own Prometheus configuration or use the xref:assembly-metrics-config-files-{context}[example custom resource file] provided with Strimzi:
+
+* `kafka-metrics.yaml`
+* `kafka-connect-metrics.yaml`
+* `kafka-mirror-maker-2-metrics.yaml`
+* `kafka-bridge-metrics.yaml`
+
+These files contain the necessary configuration, and are a good starting point for trying Prometheus with Strimzi.
+
+This procedure shows how to deploy example Prometheus metrics configuration to the `Kafka` resource.
+The same approach applies to other Strimzi components using their corresponding example files.
+
+.Procedure
+
+. Choose one of the following methods to configure metrics for your `Kafka` resource:
+
+.. **Option A: Apply the example configuration file**.
++
+Apply the `kafka-metrics.yaml` file for each `Kafka` resource you want to monitor:
++
+[source,shell,subs="+attributes"]
+----
+kubectl apply -f kafka-metrics.yaml
+----
++
+This creates or updates the `Kafka` resource with the necessary `metricsConfig` configuration to enable Strimzi Metrics Reporter.
+
+.. **Option B: Copy the example configuration into an existing `Kafka` resource**
++
+Edit the existing `Kafka` resource:
++
+[source,shell,subs="+attributes"]
+----
+kubectl edit kafka <name_of_custom_resource>
+----
++
+Copy the `metricsConfig` property from `kafka-metrics.yaml` into the `spec.kafka` section of your `Kafka` resource.
++
+For example, to enable and collect metrics related to Kafka logs and network activity, use the following patterns:
++
+[source,yaml,subs="+attributes"]
+----
+apiVersion: {KafkaApiVersion}
+kind: Kafka
+metadata:
+  name: my-cluster
+spec:
+  kafka:
+    # ...
+    metricsConfig:
+      type: strimziMetricsReporter
+      values:
+        allowList:
+          - "kafka.log.*"
+          - "kafka.network.*"
+----
+
+* `metricsConfig` enables exposing metrics using the Strimzi Metrics Reporter.
+* `metricsConfig.values.allowList` lists regular expression patterns that filter the metrics to collect. 
+The default value is `.*`, which allows all metrics.

@@ -1,0 +1,40 @@
+:_mod-docs-content-type: ASSEMBLY
+
+// This assembly is included in the following assemblies:
+//
+// assembly-config.adoc
+
+:_mod-docs-content-type: ASSEMBLY
+[id='assembly-logging-configuration-{context}']
+= Configuring logging
+
+[role="_abstract"]
+Strimzi operators and Kafka components use log4j2 for logging.
+
+You can set log levels to `INFO`, `ERROR`, `WARN`, `TRACE`, `DEBUG`, `FATAL` or `OFF`.
+
+By default, logs are produced at predefined levels.
+Loggers that are not explicitly configured inherit their configuration from parent loggers.
+
+WARNING: Setting log levels to `DEBUG` or `TRACE` can produce large volumes of output and impact performance.
+
+//choosing a logging method
+include::../../modules/configuring/con-logging-options.adoc[leveloffset=+1]
+//configuring inline logging
+include::../../modules/configuring/con-inline-logging-option.adoc[leveloffset=+1]
+//configuring external logging
+include::../../modules/configuring/con-external-logging-option.adoc[leveloffset=+1]
+//creating a configmap for logging
+include::../../modules/configuring/proc-creating-configmap.adoc[leveloffset=+1]
+//cluster operator logging config
+include::../../modules/operators/ref-operator-cluster-logging-configmap.adoc[leveloffset=+1]
+//adding logging filters to operators
+include::../../modules/configuring/con-creating-logging-filters.adoc[leveloffset=+1]
+//configuring logging filters for the Cluster Operator
+include::../../modules/configuring/proc-cluster-operator-logging-filters.adoc[leveloffset=+1]
+//configuring logging filters for the Topic or User Operator
+include::../../modules/configuring/proc-entity-operator-logging-filters.adoc[leveloffset=+1]
+//ref for configurable loggers
+include::../../modules/configuring/ref-configurable-loggers.adoc[leveloffset=+1]
+//using loggers
+include::../../modules/configuring/con-using-loggers.adoc[leveloffset=+1]

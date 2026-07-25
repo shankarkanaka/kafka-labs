@@ -1,0 +1,53 @@
+:_mod-docs-content-type: CONCEPT
+
+// Module included in the following assemblies:
+//
+// metrics/assembly-metrics.adoc
+
+[id='con-metrics-kafka-exporter-lag-{context}']
+
+= Consumer lag monitoring
+
+[role="_abstract"]
+{kafka-exporter-project} is an open source project that enhances the monitoring of Apache Kafka brokers and clients.
+Kafka Exporter extracts additional metrics data from Kafka brokers related to consumer groups, consumer lag, topic offsets, and partitions.
+The metrics are exposed in Prometheus format and can be collected by Prometheus, then visualized in Grafana.
+
+Kafka Exporter relies on data from the `__consumer_offsets` topic to report consumer lag metrics.
+This topic only contains information if consumer groups are actively committing offsets.
+Consumer groups must therefore be in use for Kafka Exporter to function correctly.
+
+Consumer lag indicates the difference in the rate of production and consumption of messages.
+Specifically, consumer lag for a given consumer group indicates the delay between the last message in the partition and the message being currently picked up by that consumer.
+
+The lag reflects the position of the consumer offset in relation to the end of the partition log.
+
+.Consumer lag between the producer and consumer offset
+
+image:consumer-lag.png[Consumer lag]
+
+This difference is sometimes referred to as the _delta_ between the producer offset and consumer offset: the read and write positions in the Kafka broker topic partitions.
+
+Suppose a topic streams 100 messages a second. A lag of 1000 messages between the producer offset (the topic partition head) and the last offset the consumer has read means a 10-second delay.
+
+.Why monitor consumer lag?
+
+For applications that rely on the processing of (near) real-time data, it is critical to monitor consumer lag to check that it does not become too big.
+The greater the lag becomes, the further the process moves from the real-time processing objective.
+
+Consumer lag, for example, might be a result of consuming too much old data that has not been purged, or through unplanned shutdowns.
+
+.Reducing consumer lag
+
+Use the Grafana charts to analyze lag and to check if actions to reduce lag are having an impact on an affected consumer group.
+If, for example, Kafka brokers are adjusted to reduce lag, the dashboard will show the  _Lag by consumer group_ chart going down and the _Messages consumed per minute_ chart going up.
+
+Typical actions to reduce lag include:
+
+* Scaling-up consumer groups by adding new consumers
+* Increasing the retention time for a message to remain in a topic
+* Adding more disk capacity to increase the message buffer
+
+Actions to reduce consumer lag depend on the underlying infrastructure and the use cases Strimzi is supporting.
+For instance, a lagging consumer is less likely to benefit from the broker being able to service a fetch request from its disk cache.
+And in certain cases, it might be acceptable to automatically drop messages until a consumer has caught up.

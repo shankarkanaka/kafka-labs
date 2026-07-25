@@ -1,0 +1,282 @@
+/*
+ * Copyright Strimzi authors.
+ * License: Apache License 2.0 (see the file LICENSE or http://apache.org/licenses/LICENSE-2.0.html).
+ */
+package io.strimzi.systemtest.performance;
+
+import io.skodjob.annotations.Desc;
+import io.skodjob.annotations.Label;
+import io.skodjob.annotations.Step;
+import io.skodjob.annotations.SuiteDoc;
+import io.skodjob.annotations.TestDoc;
+import io.skodjob.kubetest4j.resources.KubeResourceManager;
+import io.skodjob.kubetest4j.wait.WaitException;
+import io.strimzi.api.kafka.model.kafka.Kafka;
+import io.strimzi.api.kafka.model.user.KafkaUser;
+import io.strimzi.systemtest.AbstractST;
+import io.strimzi.systemtest.Environment;
+import io.strimzi.systemtest.TestConstants;
+import io.strimzi.systemtest.docs.TestDocsLabels;
+import io.strimzi.systemtest.enums.UserAuthType;
+import io.strimzi.systemtest.logs.TestLogCollector;
+import io.strimzi.systemtest.metrics.UserOperatorMetricsComponent;
+import io.strimzi.systemtest.performance.gather.collectors.UserOperatorMetricsCollector;
+import io.strimzi.systemtest.performance.gather.schedulers.UserOperatorMetricsCollectionScheduler;
+import io.strimzi.systemtest.performance.report.UserOperatorPerformanceReporter;
+import io.strimzi.systemtest.performance.report.parser.BasePerformanceMetricsParser;
+import io.strimzi.systemtest.performance.utils.UserOperatorPerformanceUtils;
+import io.strimzi.systemtest.resources.operator.SetupClusterOperator;
+import io.strimzi.systemtest.storage.TestStorage;
+import io.strimzi.systemtest.templates.crd.KafkaNodePoolTemplates;
+import io.strimzi.systemtest.templates.crd.KafkaTemplates;
+import io.strimzi.systemtest.templates.specific.ScraperTemplates;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Stream;
+
+import static io.strimzi.systemtest.TestTags.USER_CAPACITY;
+
+@SuiteDoc(
+    description = @Desc("Test suite for measuring User Operator capacity and performance limits."),
+    labels = {
+        @Label(TestDocsLabels.USER_OPERATOR)
+    }
+)
+public class UserOperatorPerformance extends AbstractST {
+
+    private static final Logger LOGGER = LogManager.getLogger(UserOperatorPerformance.class);
+
+    private static final String REPORT_DIRECTORY = "user-operator";
+
+    private TestStorage testStorage;
+    private UserOperatorMetricsCollector userOperatorCollector;
+    private UserOperatorMetricsCollectionScheduler userOperatorMetricsGatherer;
+    private UserOperatorPerformanceReporter userOperatorPerformanceReporter = new UserOperatorPerformanceReporter();
+
+    /**
+     * Provides a stream of configurations for capacity testing, designed to evaluate
+     * different operational parameters and their impact on system performance. Each configuration
+     * is tailored to test various aspects of the system under conditions that mimic different
+     * operational requirements, such as varying levels of parallel processing, batching strategies,
+     * and operational latencies.
+     *
+     * Parameters:
+     * $1 - Controller thread pool size: Defines the size of the thread pool used by the controller.
+     *       Larger sizes allow more concurrent operations but require more system resources.
+     * $2 - Cache refresh interval (ms): Time interval in milliseconds between consecutive cache refreshes,
+     *       affecting how current the data seen by the controller is.
+     * $3 - Batch queue size: Specifies the size of the batch queue, influencing how many operations
+     *       can be batched together before being processed.
+     * $4 - Maximum batch block size: The maximum number of operations that can be included in a single batch,
+     *       affecting throughput and latency.
+     * $5 - Maximum batch block time (ms): The maximum time in milliseconds that a batch can be held before
+     *       processing must start, balancing between immediate and delayed execution for better resource usage.
+     * $6 - User operations thread pool size: Specifies the number of threads dedicated to user operations,
+     *       impacting the concurrency level of user-specific tasks.
+     *
+     * @return a stream of {@link Arguments} instances, each representing a set of parameters for the test.
+     */
+    private static Stream<Arguments> provideConfigurationsForCapacity() {
+        return Stream.of(
+            // Default configuration (Successfully deployed 23,900 users.)
+            Arguments.of("50", "15000", "1024", "100", "100", "4")
+            //  Enhanced Parallel Processing (Successfully provisioned 44,100 users.)
+//            Arguments.of("100", "20000", "2048", "200", "50", "10"),
+            // Conservative Batching (Managed to support 46,200 users before the machine experienced a crash but with stronger machine 55100 users with UO 12 GiB memory consumption )
+//            Arguments.of("75", "15000", "1500", "150", "75", "8"),
+            // Aggressive Batching (very similar to Conservative Batching)
+//            Arguments.of("100", "30000", "4096", "300", "100", "12")
+        );
+    }
+
+    @TestDoc(
+        description = @Desc("This test measures the maximum capacity of KafkaUsers that can be managed by the User Operator by incrementally creating users until failure."),
+        steps = {
+            @Step(value = "Deploy Kafka cluster with User Operator configured with specified thread pool sizes, cache refresh intervals, and batch settings.", expected = "Kafka cluster with User Operator is deployed and ready."),
+            @Step(value = "Start collecting User Operator metrics.", expected = "Metrics collection is running."),
+            @Step(value = "Create KafkaUsers with TLS authentication in batches of 100.", expected = "Users are created and reach Ready state."),
+            @Step(value = "Continue creating user batches until the User Operator fails to reconcile.", expected = "Maximum capacity is reached and failure is detected."),
+            @Step(value = "Collect scoped logs (pods, deployments, configmaps, Kafka CR) using TestLogCollector with a custom resource list to avoid collecting thousands of KafkaUser CRs and Secrets.", expected = "Logs are collected for identifying bottlenecks."),
+            @Step(value = "Clean up all KafkaUsers and persist performance metrics.", expected = "Namespace is cleaned and performance data is saved to user-operator report directory.")
+        },
+        labels = {
+            @Label(TestDocsLabels.USER_OPERATOR)
+        }
+    )
+    @Tag(USER_CAPACITY)
+    @ParameterizedTest
+    @MethodSource("provideConfigurationsForCapacity")
+    void testCapacity(String controllerThreadPoolSize, String cacheRefreshIntervalMs, String batchQueueSize,
+                      String batchMaximumBlockSize, String batchMaximumBlockTimeMs, String userOperationsThreadPoolSize) throws IOException {
+        final int brokerReplicas = 3;
+        final int controllerReplicas = 3;
+        int successfulCreations = 0;
+        // we set worker queue size to high number as we measure performance and not memory or sizing...
+        final String workerQueueSize = "10000";
+
+        try {
+            KubeResourceManager.get().createResourceWithWait(
+                KafkaNodePoolTemplates.brokerPoolPersistentStorage(testStorage.getNamespaceName(), testStorage.getBrokerPoolName(), testStorage.getClusterName(), brokerReplicas)
+                    .editSpec()
+                        .withNewPersistentClaimStorage()
+                            .withSize("10Gi")
+                            .withDeleteClaim(true)
+                        .endPersistentClaimStorage()
+                    .endSpec()
+                    .build(),
+                KafkaNodePoolTemplates.controllerPoolPersistentStorage(testStorage.getNamespaceName(), testStorage.getControllerPoolName(), testStorage.getClusterName(), controllerReplicas).build()
+            );
+            KubeResourceManager.get().createResourceWithWait(
+                KafkaTemplates.kafkaMetricsConfigMap(testStorage.getNamespaceName(), testStorage.getClusterName()),
+                KafkaTemplates.kafkaWithMetrics(testStorage.getNamespaceName(), testStorage.getClusterName(), brokerReplicas)
+                    .editSpec()
+                        .editEntityOperator()
+                            .editUserOperator()
+                                .withReconciliationIntervalMs(10_000L)
+                            .endUserOperator()
+                            .editOrNewTemplate()
+                                .editOrNewUserOperatorContainer()
+                                    .addNewEnv()
+                                        .withName("STRIMZI_WORK_QUEUE_SIZE")
+                                        .withValue(workerQueueSize)
+                                    .endEnv()
+                                    .addNewEnv()
+                                        .withName("STRIMZI_CONTROLLER_THREAD_POOL_SIZE")
+                                        .withValue(controllerThreadPoolSize)
+                                    .endEnv()
+                                    .addNewEnv()
+                                        .withName("STRIMZI_CACHE_REFRESH_INTERVAL_MS")
+                                        .withValue(cacheRefreshIntervalMs)
+                                    .endEnv()
+                                    .addNewEnv()
+                                        .withName("STRIMZI_BATCH_QUEUE_SIZE")
+                                        .withValue(batchQueueSize)
+                                    .endEnv()
+                                    .addNewEnv()
+                                        .withName("STRIMZI_BATCH_MAXIMUM_BLOCK_SIZE")
+                                        .withValue(batchMaximumBlockSize)
+                                    .endEnv()
+                                    .addNewEnv()
+                                        .withName("STRIMZI_BATCH_MAXIMUM_BLOCK_TIME_MS")
+                                        .withValue(batchMaximumBlockTimeMs)
+                                    .endEnv()
+                                    .addNewEnv()
+                                        .withName("STRIMZI_USER_OPERATIONS_THREAD_POOL_SIZE")
+                                        .withValue(userOperationsThreadPoolSize)
+                                    .endEnv()
+                                .endUserOperatorContainer()
+                            .endTemplate()
+                        .endEntityOperator()
+                        .editKafka()
+                            .withNewKafkaAuthorizationSimple()
+                            .endKafkaAuthorizationSimple()
+                        .endKafka()
+                    .endSpec()
+                    .build(),
+                ScraperTemplates.scraperPod(testStorage.getNamespaceName(), testStorage.getScraperName()).build()
+            );
+
+            this.testStorage.addToTestStorage(TestConstants.SCRAPER_POD_KEY,
+                KubeResourceManager.get().kubeClient().listPodsByPrefixInName(this.testStorage.getNamespaceName(), testStorage.getScraperName()).get(0).getMetadata().getName());
+
+            // -- Metrics POLL --
+            // Assuming 'testStorage' contains necessary details like namespace and scraperPodName
+            this.userOperatorCollector = new UserOperatorMetricsCollector.Builder()
+                .withScraperPodName(this.testStorage.getScraperPodName())
+                .withNamespaceName(this.testStorage.getNamespaceName())
+                .withComponent(UserOperatorMetricsComponent.create(this.testStorage.getNamespaceName(), this.testStorage.getClusterName()))
+                .build();
+
+            this.userOperatorMetricsGatherer = UserOperatorMetricsCollectionScheduler.getInstance(this.userOperatorCollector, "strimzi.io/cluster=" + this.testStorage.getClusterName());
+            this.userOperatorMetricsGatherer.startCollecting();
+
+            // we will create incrementally users
+            final int batchSize = 100;
+
+            while (true) { // Endless loop
+                int start = successfulCreations;
+                int end = successfulCreations + batchSize;
+                List<KafkaUser> users = UserOperatorPerformanceUtils.getListOfKafkaUsers(this.testStorage, this.testStorage.getUsername(), start, end, UserAuthType.Tls);
+                try {
+                    UserOperatorPerformanceUtils.createAllUsersInListWithWait(this.testStorage, users, this.testStorage.getUsername());
+                    successfulCreations += batchSize;
+                    LOGGER.info("Successfully created and verified batch from {} to {}", start, end);
+                } catch (WaitException e) {
+                    LOGGER.error("Failed to create Kafka users from index {} to {}: {}", start, end, e.getMessage());
+
+                    final TestLogCollector logCollector = TestLogCollector.of(
+                        // Pod logs and descriptions are always collected by LogCollector automatically.
+                        // Here we scope the additional namespaced resources to only deployments, configmaps, and Kafka CRs,
+                        // avoiding the default full set which would include thousands of KafkaUser CRs and Secrets.
+                        TestLogCollector.defaultLogCollectorBuilder()
+                            .withNamespacedResources(
+                                TestConstants.DEPLOYMENT.toLowerCase(Locale.ROOT),
+                                TestConstants.CONFIG_MAP.toLowerCase(Locale.ROOT),
+                                Kafka.RESOURCE_SINGULAR
+                            ).build()
+                    );
+                    logCollector.collectLogs();
+
+                    break; // Break out of the loop if an error occurs
+                }
+            }
+        } finally {
+            UserOperatorPerformanceUtils.cleanupKafkaUsers(testStorage);
+
+            if (this.userOperatorMetricsGatherer != null) {
+                this.userOperatorMetricsGatherer.stopCollecting();
+
+                final Map<String, Object> performanceAttributes = new LinkedHashMap<>();
+
+                performanceAttributes.put(PerformanceConstants.USER_OPERATOR_IN_OPERATION_TIMEOUT_MS, "300000");
+                performanceAttributes.put(PerformanceConstants.USER_OPERATOR_IN_WORK_QUEUE_SIZE, workerQueueSize);
+                performanceAttributes.put(PerformanceConstants.USER_OPERATOR_IN_CONTROLLER_THREAD_POOL_SIZE, controllerThreadPoolSize);
+                performanceAttributes.put(PerformanceConstants.USER_OPERATOR_IN_CACHE_REFRESH_INTERVAL_MS, cacheRefreshIntervalMs);
+                performanceAttributes.put(PerformanceConstants.USER_OPERATOR_IN_BATCH_QUEUE_SIZE, batchQueueSize);
+                performanceAttributes.put(PerformanceConstants.USER_OPERATOR_IN_BATCH_MAXIMUM_BLOCK_SIZE, batchMaximumBlockSize);
+                performanceAttributes.put(PerformanceConstants.USER_OPERATOR_IN_BATCH_MAXIMUM_BLOCK_TIME_MS, batchMaximumBlockTimeMs);
+                performanceAttributes.put(PerformanceConstants.USER_OPERATOR_IN_USER_OPERATIONS_THREAD_POOL_SIZE, controllerThreadPoolSize);
+
+                performanceAttributes.put(PerformanceConstants.USER_OPERATOR_OUT_SUCCESSFUL_KAFKA_USERS_CREATED, successfulCreations);
+
+                performanceAttributes.put(PerformanceConstants.METRICS_HISTORY, this.userOperatorMetricsGatherer.getMetricsStore()); // Map of metrics history
+
+                this.userOperatorPerformanceReporter.logPerformanceData(this.testStorage, performanceAttributes, REPORT_DIRECTORY + "/" + PerformanceConstants.GENERAL_CAPACITY_USE_CASE, TimeHolder.getActualTime(), Environment.PERFORMANCE_DIR);
+            }
+        }
+    }
+
+    @BeforeEach
+    public void setUp(ExtensionContext extensionContext) {
+        this.testStorage = new TestStorage(extensionContext, TestConstants.CO_NAMESPACE);
+    }
+
+    // Additional setup and utility methods as needed
+    @BeforeAll
+    void setup() {
+        SetupClusterOperator
+            .getInstance()
+            .withDefaultConfiguration()
+            .install();
+    }
+
+    @AfterAll
+    void tearDown() {
+        // show tables with metrics
+        BasePerformanceMetricsParser.main(new String[]{PerformanceConstants.USER_OPERATOR_PARSER});
+    }
+}

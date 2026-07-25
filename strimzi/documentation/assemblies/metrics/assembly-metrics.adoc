@@ -1,0 +1,50 @@
+:_mod-docs-content-type: ASSEMBLY
+
+// This assembly is included in the following assemblies:
+//
+// deploying/deploying.adoc
+
+[id='assembly-metrics-{context}']
+= Introducing metrics
+
+[role="_abstract"]
+Metrics provide insight into the health, performance, and capacity of your Kafka deployment.
+By observing these metrics, you can detect potential issues early, optimize resource usage, and improve reliability.
+
+Metrics from Strimzi components can be collected using Prometheus and visualized in Grafana.
+Prometheus collects metrics from running pods in your cluster, while Grafana provides an intuitive interface for exploring and visualizing these metrics. 
+
+The Strimzi operators expose Prometheus metrics by default, including reconciliation counts, durations, JVM data, and resource processing statistics.
+Other components and features require configuration to expose their metrics.
+
+In addition, you can use kube-state-metrics (KSM) to monitor the state and readiness of Strimzi custom resources, and to raise alerts for warning conditions.
+
+Strimzi provides example Prometheus rules, Grafana dashboards, and kube-state-metrics configuration files that you can adapt to your environment.
+You can also track message flow across components by xref:assembly-distributed-tracing-str[setting up distributed tracing].
+
+NOTE: Strimzi provides example installation files for Prometheus, Grafana, and kube-state-metrics to help get you started.
+For further information, refer to the resources of those projects.
+
+[role="_additional-resources"]
+.Additional resources
+
+* {PrometheusHome}
+* {PrometheusConfig}
+* {kafka-exporter-project}
+* {GrafanaHome}
+* link:{ApacheKafkaDocsBase}operations/monitoring/[Apache Kafka Monitoring^]
+* link:https://github.com/kubernetes/kube-state-metrics/[kube-state-metrics^]
+
+//Example metrics files
+include::assembly-metrics-config-files.adoc[leveloffset=+1]
+//How to set up Prometheus
+include::assembly_metrics-prometheus-setup.adoc[leveloffset=+1]
+//How to add Grafana dashboards
+include::../../modules/metrics/proc_metrics-grafana-dashboard.adoc[leveloffset=+1]
+//How to monitor custom resources managed by Strimzi
+include::../../modules/metrics/proc_metrics-custom-resource-monitoring.adoc[leveloffset=+1]
+//How to monitor Consumer lag
+include::../../modules/metrics/con_kafka-exporter-lag.adoc[leveloffset=+1]
+include::../../modules/metrics/proc-kafka-exporter-deploy.adoc[leveloffset=+2]
+//Understanding metrics for Cruise Control
+include::../../modules/metrics/con-metrics-cruise-control.adoc[leveloffset=+1]

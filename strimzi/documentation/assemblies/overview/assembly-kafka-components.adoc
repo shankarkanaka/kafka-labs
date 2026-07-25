@@ -1,0 +1,31 @@
+:_mod-docs-content-type: ASSEMBLY
+
+// This assembly is included in:
+//
+// overview/overview.adoc
+
+[id="kafka-components_{context}"]
+= Strimzi deployment of Kafka
+
+[role="_abstract"]
+Strimzi enables the deployment of Apache Kafka components to a Kubernetes cluster, typically running as clusters for high availability.
+
+A standard Kafka deployment using Strimzi might include the following components:
+
+* *Kafka* cluster of broker nodes as the core component
+* *Kafka Connect* cluster for external data connections
+* *Kafka MirrorMaker* cluster to mirror data to another Kafka cluster
+* *Kafka Exporter* to extract additional Kafka metrics data for monitoring
+* *HTTP Bridge* to enable HTTP-based communication with Kafka
+* *Cruise Control* to rebalance topic partitions across brokers
+
+Not all of these components are required, though you need Kafka as a minimum for a Strimzi-managed Kafka cluster.
+Depending on your use case, you can deploy the additional components as needed. 
+These components can also be used with Kafka clusters that are not managed by Strimzi.
+
+//deployment options
+include::../../modules/overview/con-kafka-deploy-options.adoc[leveloffset=+1]
+//Overview of node pools
+include::../../modules/overview/con-kafka-concepts-node-pools.adoc[leveloffset=+1]
+//Overview of Kafka component interaction
+include::../../modules/overview/con-kafka-concepts-components.adoc[leveloffset=+1]

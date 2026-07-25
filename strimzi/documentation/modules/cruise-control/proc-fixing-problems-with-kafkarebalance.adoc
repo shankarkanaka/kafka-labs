@@ -1,0 +1,55 @@
+:_mod-docs-content-type: PROCEDURE
+
+// Module included in the following assemblies:
+//
+// assembly-cruise-control-concepts.adoc
+
+[id='proc-fixing-problems-with-kafkarebalance-{context}']
+= Troubleshooting and refreshing rebalances
+
+[role="_abstract"]
+When creating a `KafkaRebalance` resource or interacting with Cruise Control, errors are reported in the resource status, along with guidance on how to fix them.
+In such cases, the resource transitions to the `NotReady` state.
+
+To continue with a cluster rebalance operation, you must rectify any configuration issues in the `KafkaRebalance` resource or address any problems with the Cruise Control deployment. 
+
+Common issues include the following:
+
+* Misconfigured parameters in the `KafkaRebalance` resource.
+* The `strimzi.io/cluster` label for specifying the Kafka cluster in the `KafkaRebalance` resource is missing.
+* The Cruise Control server is not deployed as the `cruiseControl` property in the `Kafka` resource is missing.
+* The Cruise Control server is not reachable.
+
+After fixing any issues, you need to add the `refresh` annotation to the `KafkaRebalance` resource.
+During a “refresh”, a new optimization proposal is requested from the Cruise Control server.
+
+.Prerequisites
+
+* You have xref:proc-approving-optimization-proposal-{context}[approved an optimization proposal].
+
+* The status of the `KafkaRebalance` custom resource for the rebalance operation is `NotReady`.
+
+.Procedure
+
+. Get information about the error from the `KafkaRebalance` status:
++
+[source,shell]
+----
+kubectl describe kafkarebalance <kafka_rebalance_resource_name>
+----
+
+. Attempt to resolve the issue by annotating the `KafkaRebalance` resource to refresh the proposal:
++
+[source,shell]
+----
+kubectl annotate kafkarebalance <kafka_rebalance_resource_name> strimzi.io/rebalance="refresh"
+----
+
+. Check the status of the `KafkaRebalance` resource:
++
+[source,shell]
+----
+kubectl describe kafkarebalance <kafka_rebalance_resource_name>
+----
+
+. Wait until the status changes to `PendingProposal`, or directly to `ProposalReady`.

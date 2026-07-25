@@ -1,0 +1,162 @@
+name: "Parse Comment Config"
+description: "Parses the comment to extract run flag, pipeline list, profile list, and additional configuration fields."
+
+inputs:
+  releaseVersion:
+    description: "Release version to test (i.e. 'latest', '0.46.0')"
+    required: false
+    default: "latest"
+  kafkaVersion:
+    description: "Kafka version. e.g. '4.0.0' or 'latest'"
+    required: false
+    default: "latest"
+  pipeline:
+    description: "Comma-separated or single pipeline name(s)"
+    required: false
+    default: "smoke"
+
+outputs:
+  pipelineList:
+    description: "Comma-separated list of pipeline names (if provided)"
+    value: ${{ steps.parse_comment.outputs.pipelineList }}
+  profileList:
+    description: "Comma-separated list of profile names (fallback if pipeline is not provided)"
+    value: ${{ steps.parse_comment.outputs.profileList }}
+  agent:
+    description: "The parsed agent value from the comment"
+    value: ${{ steps.parse_comment.outputs.agent }}
+  architecture:
+    description: "The parsed architecture value from the comment"
+    value: ${{ steps.parse_comment.outputs.architecture }}
+  strimzi_feature_gates:
+    description: "The parsed strimzi_feature_gates value"
+    value: ${{ steps.parse_comment.outputs.strimzi_feature_gates }}
+  strimzi_rbac_scope:
+    description: "The parsed strimzi_rbac_scope value"
+    value: ${{ steps.parse_comment.outputs.strimzi_rbac_scope }}
+  cluster_operator_install_type:
+    description: "The parsed cluster_operator_install_type value"
+    value: ${{ steps.parse_comment.outputs.cluster_operator_install_type }}
+  groups:
+    description: "JUnit5 test groups that will be executed"
+    value: ${{ steps.parse_comment.outputs.groups }}
+  tests:
+    description: "JUnit5 tests that will be executed"
+    value: ${{ steps.parse_comment.outputs.tests }}
+  kafkaVersion:
+    description: "Kafka version used for most of the tests"
+    value: ${{ steps.parse_comment.outputs.kafkaVersion }}
+  releaseVersion:
+    description: "Release version a.k.a docker tag of released images"
+    value: ${{ steps.parse_comment.outputs.releaseVersion }}
+  kubeVersion:
+    description: "Used Kubernetes version for Kind/Minikube. Note that for Kind you have to use whole image with sha digest!"
+    value: ${{ steps.parse_comment.outputs.kubeVersion }}
+  kindVersion:
+    description: "Version of Kind binary to install (e.g. '0.29.0'). Defaults to '0.31.0' if empty. In case you use different from default version of Kind, you should reference full image via `kindVersion` parameter to achieve supported configuration"
+    value: ${{ steps.parse_comment.outputs.kindVersion }}
+  parallel:
+    description: "How many tests will be executed in parallel"
+    value: ${{ steps.parse_comment.outputs.parallel }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build Comment
+      id: build_comment
+      uses: actions/github-script@v9
+      env:
+        INPUT_PIPELINE: ${{ inputs.pipeline }}
+        INPUT_KAFKA_VERSION: ${{ inputs.kafkaVersion }}
+      with:
+        script: |
+          const body = context.payload?.comment?.body ?? '';
+          const pipeline = process.env.INPUT_PIPELINE || 'smoke';
+          const fallback = `/gha run pipeline=${pipeline} kafkaVersion=${process.env.INPUT_KAFKA_VERSION}`;
+          const builtComment = (body && body.trim().length) ? body : fallback;
+          
+          core.setOutput('builtComment', builtComment);
+          core.info(`Parsed builtComment: ${builtComment}`);
+
+    - name: Parse Comment
+      id: parse_comment
+      uses: actions/github-script@v9
+      env:
+        INPUT_RELEASE_VERSION: ${{ inputs.releaseVersion }}
+        BUILT_COMMENT: ${{ steps.build_comment.outputs.builtComment }}
+      with:
+        script: |
+          const comment = process.env.BUILT_COMMENT;
+
+          // Remove all backticks from the comment
+          const sanitized = comment.replace(/`/g, '');
+          
+          // Create one-line comment in case it is multi-line
+          const flat   = sanitized.replace(/\s+/g, ' ').trim();
+          
+          // Create lower-case 
+          const lower  = flat.toLowerCase();
+          
+          // Check whether the comment starts with /gha run
+          const starts = /^\s*\/gha\s+run\b/i.test(sanitized);
+
+          // Function for getting parameter from string
+          const getParameter = (key, src = flat) => {
+            const regex = new RegExp(`\\b${key}=("([^"]*)"|'([^']*)'|([^\\s]+))`, 'i');
+            const match = src.match(regex);
+            if (!match) {
+              return '';
+            }
+            return match[2] ?? match[3] ?? match[4] ?? '';
+          };
+
+          const DEFAULTS = {
+            pipelines:    '',
+            profiles:     '',
+            featureGate:  '-ServerSideApplyPhase1,-UseConnectBuildWithBuildah,+UseBackgroundPodDeletion',
+            rbacScope:    'CLUSTER',
+            installType:  'yaml',
+            parallel:     '1',
+            kafkaVersion: 'latest',
+            kubeVersion:  'latest',
+            kindVersion:  '',
+          };
+
+          let pipelineList = '', profileList = '';
+          if (starts) {
+            const pipe = getParameter('pipeline', lower);
+            const prof = getParameter('profile',  lower);
+            if (pipe) {
+              pipelineList = pipe;
+            } else {
+              profileList = prof || DEFAULTS.profiles;
+            }
+          }
+
+          const out = {
+            pipelineList,
+            profileList,
+            agent:                         getParameter('agent', lower),
+            architecture:                  getParameter('architecture', lower),
+            strimzi_feature_gates:         getParameter('strimzi_feature_gates', sanitized), // keep case
+            strimzi_rbac_scope:            getParameter('strimzi_rbac_scope',  sanitized),  // keep case
+            cluster_operator_install_type: getParameter('cluster_operator_install_type', lower) || DEFAULTS.installType,
+            parallel:                      getParameter('parallel', lower) || DEFAULTS.parallel,
+            groups:                        getParameter('groups', sanitized),
+            tests:                         getParameter('tests', sanitized),
+            kafkaVersion:                  getParameter('kafkaversion', lower) || DEFAULTS.kafkaVersion,
+            kubeVersion:                   getParameter('kubeversion',  lower) || DEFAULTS.kubeVersion,
+            kindVersion:                   getParameter('kindversion',  lower) || DEFAULTS.kindVersion,
+            releaseVersion:                process.env.INPUT_RELEASE_VERSION || 'latest',
+          };
+
+          if (starts && !out.pipelineList && !out.profileList) {
+            out.profileList = DEFAULTS.profiles;
+          }
+
+          // Export collected data as outputs
+          for (const [k, v] of Object.entries(out)) {
+            core.setOutput(k, v);
+          }
+          
+          core.info(`Parsed:\n${JSON.stringify(out, null, 2)}`);

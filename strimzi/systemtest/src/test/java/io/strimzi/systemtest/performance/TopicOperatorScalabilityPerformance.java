@@ -1,0 +1,193 @@
+/*
+ * Copyright Strimzi authors.
+ * License: Apache License 2.0 (see the file LICENSE or http://apache.org/licenses/LICENSE-2.0.html).
+ */
+package io.strimzi.systemtest.performance;
+
+import io.fabric8.kubernetes.api.model.Quantity;
+import io.fabric8.kubernetes.api.model.ResourceRequirementsBuilder;
+import io.skodjob.annotations.Desc;
+import io.skodjob.annotations.Label;
+import io.skodjob.annotations.Step;
+import io.skodjob.annotations.SuiteDoc;
+import io.skodjob.annotations.TestDoc;
+import io.skodjob.kubetest4j.resources.KubeResourceManager;
+import io.strimzi.api.kafka.model.topic.KafkaTopic;
+import io.strimzi.systemtest.AbstractST;
+import io.strimzi.systemtest.Environment;
+import io.strimzi.systemtest.TestConstants;
+import io.strimzi.systemtest.annotations.IsolatedTest;
+import io.strimzi.systemtest.docs.TestDocsLabels;
+import io.strimzi.systemtest.performance.report.TopicOperatorPerformanceReporter;
+import io.strimzi.systemtest.performance.report.parser.BasePerformanceMetricsParser;
+import io.strimzi.systemtest.performance.utils.TopicOperatorPerformanceUtils;
+import io.strimzi.systemtest.resources.CrdClients;
+import io.strimzi.systemtest.resources.operator.SetupClusterOperator;
+import io.strimzi.systemtest.storage.TestStorage;
+import io.strimzi.systemtest.templates.crd.KafkaNodePoolTemplates;
+import io.strimzi.systemtest.templates.crd.KafkaTemplates;
+import io.strimzi.systemtest.utils.kafkaUtils.KafkaTopicUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
+
+import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import static io.strimzi.systemtest.TestTags.PERFORMANCE;
+import static io.strimzi.systemtest.TestTags.SCALABILITY;
+
+@SuiteDoc(
+    description = @Desc("Test suite for measuring Topic Operator scalability under concurrent topic operations."),
+    beforeTestSteps = {
+        @Step(value = "Deploy a Kafka cluster with the Topic Operator configured with specific resource limits and batch settings.", expected = "Kafka cluster with Topic Operator is deployed and ready.")
+    },
+    labels = {
+        @Label(TestDocsLabels.TOPIC_OPERATOR)
+    }
+)
+@Tag(PERFORMANCE)
+@Tag(SCALABILITY)
+public class TopicOperatorScalabilityPerformance extends AbstractST {
+
+    protected static final String REPORT_DIRECTORY = "topic-operator";
+
+    protected TopicOperatorPerformanceReporter topicOperatorPerformanceReporter = new TopicOperatorPerformanceReporter();
+
+    private static final Logger LOGGER = LogManager.getLogger(TopicOperatorScalabilityPerformance.class);
+
+    private TestStorage suiteTestStorage;
+
+    // topic event batches to test
+    private final List<Integer> eventBatches = List.of(10, 100, 500, 1000);
+    private final int maxBatchSize = 100;
+    private final int maxBatchLingerMs = 100;
+    private final int maxQueueSize = Integer.MAX_VALUE;
+    private long reconciliationTimeMs;
+
+    @TestDoc(
+        description = @Desc("This test measures throughput (time to process N topics in parallel), NOT latency (response time for a single topic)."),
+        steps = {
+            @Step(value = "For each configured number of topics (10, 100, 500, 1000), spawn one thread per KafkaTopic to perform its full lifecycle concurrently.", expected = "N concurrent threads are created, each responsible for one KafkaTopic full lifecycle (create, modify, delete)."),
+            @Step(value = "Each thread performs CREATE: Creates KafkaTopic with specified partitions and replicas.", expected = "KafkaTopic is created and ready."),
+            @Step(value = "Each thread performs MODIFY: Updates topic configuration.", expected = "KafkaTopic is updated and reconciled."),
+            @Step(value = "Each thread performs DELETE: Deletes the KafkaTopic.", expected = "KafkaTopic is deleted from the cluster."),
+            @Step(value = "Wait for all threads to complete their full lifecycle operations and measure total elapsed time.", expected = "All KafkaTopics have completed create-modify-delete lifecycle. Total time represents THROUGHPUT capacity (time for all N topics to complete), not individual topic LATENCY."),
+            @Step(value = "Clean up any remaining topics and collect performance metrics, including total reconciliation time.", expected = "Namespace is cleaned, performance data is persisted to topic-operator report directory for analysis.")
+        },
+        labels = {
+            @Label(TestDocsLabels.TOPIC_OPERATOR)
+        }
+    )
+    @IsolatedTest
+    void testScalability() {
+        eventBatches.forEach(numEvents -> {
+            final int eventPerTask = 4;
+            final int numberOfTasks = numEvents / eventPerTask;
+            final int numSpareEvents = numEvents % eventPerTask;
+            try {
+                this.reconciliationTimeMs = TopicOperatorPerformanceUtils.processAllTopicsConcurrently(suiteTestStorage, numberOfTasks, numSpareEvents, 0);
+            } finally {
+                // safe net if something went wrong during test case and KafkaTopic is not properly deleted
+                LOGGER.info("Cleaning namespace: {}", suiteTestStorage.getNamespaceName());
+                List<KafkaTopic> kafkaTopics = CrdClients.kafkaTopicClient().inNamespace(suiteTestStorage.getNamespaceName()).list().getItems();
+                KubeResourceManager.get().deleteResourceAsyncWait(kafkaTopics.toArray(new KafkaTopic[0]));
+                KafkaTopicUtils.waitForTopicWithPrefixDeletion(suiteTestStorage.getNamespaceName(), suiteTestStorage.getTopicName());
+
+                final Map<String, Object> performanceAttributes = new LinkedHashMap<>();
+
+                performanceAttributes.put(PerformanceConstants.TOPIC_OPERATOR_IN_MAX_QUEUE_SIZE, maxQueueSize);
+                performanceAttributes.put(PerformanceConstants.TOPIC_OPERATOR_IN_MAX_BATCH_SIZE, maxBatchSize);
+                performanceAttributes.put(PerformanceConstants.TOPIC_OPERATOR_IN_NUMBER_OF_TOPICS, numberOfTasks);
+                performanceAttributes.put(PerformanceConstants.TOPIC_OPERATOR_IN_NUMBER_OF_EVENTS, (numberOfTasks * 3) + numSpareEvents);
+                performanceAttributes.put(PerformanceConstants.TOPIC_OPERATOR_IN_MAX_BATCH_LINGER_MS, maxBatchLingerMs);
+                performanceAttributes.put(PerformanceConstants.TOPIC_OPERATOR_IN_PROCESS_TYPE, "TOPIC-CONCURRENT");
+
+                performanceAttributes.put(PerformanceConstants.OPERATOR_OUT_RECONCILIATION_INTERVAL, reconciliationTimeMs);
+
+                try {
+                    this.topicOperatorPerformanceReporter.logPerformanceData(this.suiteTestStorage, performanceAttributes, REPORT_DIRECTORY + "/" + PerformanceConstants.GENERAL_SCALABILITY_USE_CASE, TimeHolder.getActualTime(), Environment.PERFORMANCE_DIR);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
+    }
+
+    @BeforeAll
+    void setUp() {
+        SetupClusterOperator
+            .getInstance()
+            .withDefaultConfiguration()
+            .install();
+
+        suiteTestStorage = new TestStorage(KubeResourceManager.get().getTestContext(), TestConstants.CO_NAMESPACE);
+
+        KubeResourceManager.get().createResourceWithWait(
+            KafkaNodePoolTemplates.brokerPoolPersistentStorage(suiteTestStorage.getNamespaceName(), suiteTestStorage.getBrokerPoolName(), suiteTestStorage.getClusterName(), 3)
+                    .editSpec()
+                        .withResources(new ResourceRequirementsBuilder()
+                                .addToLimits("memory", new Quantity("768Mi"))
+                                .addToLimits("cpu", new Quantity("750m"))
+                                .addToRequests("memory", new Quantity("768Mi"))
+                                .addToRequests("cpu", new Quantity("750m"))
+                                .build())
+                    .endSpec()
+                    .build(),
+            KafkaNodePoolTemplates.controllerPoolPersistentStorage(suiteTestStorage.getNamespaceName(), suiteTestStorage.getControllerPoolName(), suiteTestStorage.getClusterName(), 3)
+                    .editSpec()
+                        .withResources(new ResourceRequirementsBuilder()
+                                .addToLimits("memory", new Quantity("768Mi"))
+                                .addToLimits("cpu", new Quantity("750m"))
+                                .addToRequests("memory", new Quantity("768Mi"))
+                                .addToRequests("cpu", new Quantity("750m"))
+                                .build())
+                    .endSpec()
+                    .build()
+        );
+
+        KubeResourceManager.get().createResourceWithWait(
+            KafkaTemplates.kafka(suiteTestStorage.getNamespaceName(),  suiteTestStorage.getClusterName(), 3)
+                .editSpec()
+                    .editEntityOperator()
+                        .editTopicOperator()
+                            .withReconciliationIntervalMs(10_000L)
+                            .withResources(new ResourceRequirementsBuilder()
+                                .addToLimits("memory", new Quantity("768Mi"))
+                                .addToLimits("cpu", new Quantity("750m"))
+                                .addToRequests("memory", new Quantity("768Mi"))
+                                .addToRequests("cpu", new Quantity("750m"))
+                                .build())
+                        .endTopicOperator()
+                        .editOrNewTemplate()
+                            .editOrNewTopicOperatorContainer()
+                                .addNewEnv()
+                                    .withName("STRIMZI_MAX_BATCH_SIZE")
+                                    .withValue(String.valueOf(maxBatchSize))
+                                .endEnv()
+                                .addNewEnv()
+                                    .withName("MAX_BATCH_LINGER_MS")
+                                    .withValue(String.valueOf(maxBatchLingerMs))
+                                .endEnv()
+                                .addNewEnv()
+                                    .withName("STRIMZI_MAX_QUEUE_SIZE")
+                                    .withValue(String.valueOf(maxQueueSize))
+                                .endEnv()
+                            .endTopicOperatorContainer()
+                        .endTemplate()
+                    .endEntityOperator()
+                .endSpec()
+                .build()
+        );
+    }
+
+    @AfterAll
+    void tearDown() {
+        // show tables with metrics
+        BasePerformanceMetricsParser.main(new String[]{PerformanceConstants.TOPIC_OPERATOR_PARSER});
+    }
+}

@@ -1,0 +1,88 @@
+:_mod-docs-content-type: CONCEPT
+
+// Module included in the following assemblies:
+//
+// assembly-config.adoc
+
+[id='con-mirrormaker-tasks-max-{context}']
+= Setting a maximum number of data replication tasks
+
+[role="_abstract"]
+Use `tasksMax` to control how many tasks are assigned to connectors. 
+Increasing the number of tasks helps improve performance when replicating many partitions or synchronizing the offsets of a large number of consumer groups.
+
+MirrorMaker 2 connectors create distributed tasks that move data between clusters. 
+These tasks follow a set of operational behaviors and allocation rules.
+
+Task behavior:
+
+* Each task runs on a single worker pod.
+* Tasks run in parallel.
+* A worker pod can run multiple tasks, but each task runs in isolation.
+* You don’t need more pods than tasks. If there are fewer pods, tasks are distributed across available workers.
+
+Task allocation rules:
+
+* By default, connectors run with 1 task, unless `tasksMax` is set.
+* For the `MirrorSourceConnector`, the maximum possible tasks = number of partitions.
+* For the `MirrorCheckpointConnector`, the maximum possible tasks = number of consumer groups.
+* Actual tasks started is the lower value of `tasksMax` and the maximum possible tasks.
+
+If the infrastructure can support it, increasing the number of tasks improves throughput and reduces latency during high-volume replication.
+
+.Increasing the number of tasks for the source connector
+[source,yaml,subs="+quotes,attributes"]
+----
+apiVersion: {KafkaMirrorMaker2ApiVersion}
+kind: KafkaMirrorMaker2
+metadata:
+  name: my-mirror-maker2
+spec:
+  # ...
+  mirrors:
+  - source:
+      # ...
+    sourceConnector:
+      tasksMax: 10
+      autoRestart:
+          enabled: true
+  # ...
+----
+
+Enable automatic restarts of failed connectors and tasks using `autoRestart`. 
+By default, the number of restarts is indefinite, but you can set a maximum on the number of automatic restarts using the `maxRestarts` property.
+
+Increasing the number of tasks for the checkpoint connector is useful when you have a large number of consumer groups.
+
+.Increasing the number of tasks for the checkpoint connector
+[source,yaml,subs="+quotes,attributes"]
+----
+apiVersion: {KafkaMirrorMaker2ApiVersion}
+kind: KafkaMirrorMaker2
+metadata:
+  name: my-mirror-maker2
+spec:
+  # ...
+  mirrors:
+  - source:
+      # ...
+    checkpointConnector:
+      tasksMax: 10
+      autoRestart:
+          enabled: true
+  # ...
+----
+
+By default, MirrorMaker 2 checks for new consumer groups every 10 minutes. 
+You can adjust the `refresh.groups.interval.seconds` configuration to change the frequency.
+Take care when adjusting lower.
+More frequent checks can have a negative impact on performance.   
+
+== Checking connector task operations
+
+If you are using Prometheus and Grafana to monitor your deployment, you can check MirrorMaker 2 performance.
+The example MirrorMaker 2 Grafana dashboard provided with Strimzi shows the following metrics related to tasks and latency.
+
+* The number of tasks
+* Replication latency
+* Offset synchronization latency

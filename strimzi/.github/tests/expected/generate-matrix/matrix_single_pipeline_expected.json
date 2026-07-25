@@ -1,0 +1,50 @@
+[
+  {
+    "agent": "cncf-ubuntu-4-16-x86",
+    "arch": "amd64",
+    "pipeline": "upgrade",
+    "profile": "azp_kraft_upgrade",
+    "timeout": 180,
+    "strimzi_feature_gates": "",
+    "strimzi_rbac_scope": "CLUSTER",
+    "cluster_operator_install_type": "yaml",
+    "parallel": 1,
+    "jobName": "upgrade-azp_kraft_upgrade-amd64"
+  },
+  {
+    "agent": "cncf-ubuntu-4-16-x86",
+    "arch": "amd64",
+    "pipeline": "upgrade",
+    "profile": "azp_kafka_upgrade",
+    "timeout": 180,
+    "strimzi_feature_gates": "",
+    "strimzi_rbac_scope": "CLUSTER",
+    "cluster_operator_install_type": "yaml",
+    "parallel": 1,
+    "jobName": "upgrade-azp_kafka_upgrade-amd64"
+  },
+  {
+    "agent": "cncf-ubuntu-4-16-arm",
+    "arch": "arm64",
+    "pipeline": "upgrade",
+    "profile": "azp_kraft_upgrade",
+    "timeout": 180,
+    "strimzi_feature_gates": "",
+    "strimzi_rbac_scope": "CLUSTER",
+    "cluster_operator_install_type": "yaml",
+    "parallel": 1,
+    "jobName": "upgrade-azp_kraft_upgrade-arm64"
+  },
+  {
+    "agent": "cncf-ubuntu-4-16-arm",
+    "arch": "arm64",
+    "pipeline": "upgrade",
+    "profile": "azp_kafka_upgrade",
+    "timeout": 180,
+    "strimzi_feature_gates": "",
+    "strimzi_rbac_scope": "CLUSTER",
+    "cluster_operator_install_type": "yaml",
+    "parallel": 1,
+    "jobName": "upgrade-azp_kafka_upgrade-arm64"
+  }
+]

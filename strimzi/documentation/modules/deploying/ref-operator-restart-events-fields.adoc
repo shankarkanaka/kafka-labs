@@ -1,0 +1,24 @@
+:_mod-docs-content-type: REFERENCE
+
+// Module included in the following assemblies:
+//
+// assembly-deploy-restart-events.adoc
+
+[id='ref-operator-restart-events-fields-{context}']
+= Restart event filters
+
+[role="_abstract"]
+When checking restart events from the command line, you can specify a `field-selector` to filter on Kubernetes event fields.
+
+The following fields are available when filtering events with `field-selector`.
+
+`regardingObject.kind`:: The resource that owns the Pod being restarted, and for restart events, the kind is always `Kafka`.
+`regarding.namespace`:: The namespace that the resource belongs to.
+`regardingObject.name`:: The resource's name, for example, `strimzi-cluster`.
+`regardingObject.uid`:: The unique ID of the resource.
+`reason`:: The reason the Pod was restarted, for example, `JbodVolumesChanged`.
+`reportingController`:: The reporting component is always `strimzi.io/cluster-operator` for Strimzi restart events.
+`source`:: `source` is an older version of `reportingController`. The reporting component is always `strimzi.io/cluster-operator` for Strimzi restart events.
+`type`:: The event type, which is either `Warning` or `Normal`. For Strimzi restart events, the type is `Normal`.
+
+NOTE: In older versions of Kubernetes, the fields using the `regarding` prefix might use an `involvedObject` prefix instead. `reportingController` was previously called `reportingComponent`.

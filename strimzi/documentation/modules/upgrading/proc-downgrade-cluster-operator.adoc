@@ -1,0 +1,72 @@
+:_mod-docs-content-type: PROCEDURE
+
+// Module included in the following assemblies:
+//
+// assembly-downgrade.adoc
+
+[id='proc-downgrade-cluster-operator-{context}']
+= Downgrading the Cluster Operator to a previous version
+
+[role="_abstract"]
+This procedure describes how to downgrade a Cluster Operator deployment to a previous version.
+
+NOTE: Kafka clusters managed by Strimzi always use node pools. 
+Downgrading to a cluster without node pools is not possible.
+
+.Prerequisites
+
+* An existing Cluster Operator deployment is available.
+* You have xref:downloads-{context}[downloaded the installation files for the previous version].
+
+Currently, no feature gates require enabling or disabling before downgrading. 
+If a feature gate introduces such a requirement, the details will be provided here.
+
+.Procedure
+
+. Take note of any configuration changes made during the previous Cluster Operator installation.
++
+Any changes will be *overwritten* by the previous version of the Cluster Operator.
+
+. Revert your custom resources to reflect the supported configuration options available for the version of Strimzi you are downgrading to.
+
+. Update the Cluster Operator.
+
+.. Modify the installation files for the previous version according to the namespace the Cluster Operator is running in.
++
+include::../../shared/snip-cluster-operator-namespace-sed.adoc[]
++
+.. If you modified one or more environment variables in your existing Cluster Operator `Deployment`, edit the
+`install/cluster-operator/060-Deployment-strimzi-cluster-operator.yaml` file to use those environment variables.
+
+. When you have an updated configuration, deploy it along with the rest of the installation resources:
++
+[source,shell,subs="+quotes,attributes"]
+----
+kubectl replace -f install/cluster-operator
+----
++
+Wait for the rolling updates to complete.
+
+. If the target operator version does not support the current Kafka version, an error message is returned.
++
+To resolve this, downgrade to a supported Kafka version if possible:
++
+--
+.. Edit the `Kafka` custom resource.
+.. Change the `spec.kafka.version` property to a supported Kafka version.
+--
++
+If no error message is returned, you can proceed to the next step and upgrade the Kafka version later.
+
+
+. Get the image for the Kafka pod to ensure the downgrade was successful:
++
+[source,shell,subs="+quotes,attributes"]
+----
+kubectl get pod my-cluster-kafka-0 -o jsonpath='{.spec.containers[0].image}'
+----
++
+The image tag shows the new Strimzi version followed by the Kafka version. 
+For example, `<strimzi_version>-kafka-<kafka_version>`.
++
+You can also xref:con-upgrade-status-{context}[check the downgrade has completed successfully from the status of the `Kafka` resource].

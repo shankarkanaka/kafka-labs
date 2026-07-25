@@ -1,0 +1,72 @@
+:_mod-docs-content-type: ASSEMBLY
+
+// This assembly is included in the following assemblies:
+//
+// configuring/configuring.adoc
+
+[id='security-{context}']
+= Managing TLS certificates
+
+[role="_abstract"]
+Strimzi supports TLS for encrypted communication between Kafka and Strimzi components.
+
+Strimzi establishes encrypted TLS connections for communication between the following components when using Kafka in KRaft mode:
+
+* Kafka brokers
+* Kafka controllers
+* Kafka brokers and controllers
+* Strimzi operators and Kafka
+* Cruise Control and Kafka brokers
+* Kafka Exporter and Kafka brokers
+
+Connections between clients and Kafka brokers use listeners that you must configure to use TLS-encrypted communication. 
+You configure these listeners in the `Kafka` custom resource and each listener name and port number must be unique within the cluster. 
+Communication between Kafka brokers and Kafka clients is encrypted according to how the `tls` property is configured for the listener.
+For more information, see xref:deploy-client-access-str[].
+ 
+The following diagram shows the connections for secure communication.   
+
+.Kafka communication secured by TLS encryption
+image::secure_communication_kraft.png[Secure Communication]
+
+The ports shown in the diagram are used as follows:
+
+Control plane listener (9090):: The internal control plane listener on port 9090 facilitates interbroker communication between Kafka controllers and broker-to-controller communication.
+Additionally, the Cluster Operator communicates with the controllers through the listener.
+This listener is not accessible to Kafka clients.
+Replication listener (9091):: Data replication between brokers, as well as internal connections to the brokers from Strimzi operators, Cruise Control, and the Kafka Exporter, use the replication listener on port 9091.
+This listener is not accessible to Kafka clients.
+Listeners for client connections (9092 or higher):: 
+For TLS-encrypted communication (through configuration of the listener), internal and external clients connect to Kafka brokers.
+External clients (producers and consumers) connect to the Kafka brokers through the advertised listener port.    
+
+IMPORTANT: When configuring listeners for client access to brokers, you can use port 9092 or higher (9093, 9094, and so on), but with a few exceptions.
+The listeners cannot be configured to use the ports reserved for interbroker communication (9090 and 9091), Prometheus metrics (9404), and JMX (Java Management Extensions) monitoring (9999).
+
+.Node status monitoring using the `KafkaAgent` (8443)
+
+Strimzi includes a component called `KafkaAgent` that runs inside each Kafka node. 
+The agent is responsible for collecting and providing node-specific information, such as current state and readiness, to the Cluster Operator. 
+It listens on port 8443 for secure HTTPS connections and exposes this information through a REST API, which the Cluster Operator uses to retrieve data from the nodes.
+
+include::../../modules/security/con-certificate-authorities.adoc[leveloffset=+1]
+
+include::../../modules/security/ref-certificates-and-secrets.adoc[leveloffset=+1]
+
+include::../../modules/security/con-certificate-renewal.adoc[leveloffset=+1]
+//scheduling maintenance time windows
+include::../../modules/configuring/con-maintenance-time-window-definition.adoc[leveloffset=+2]
+
+include::../../modules/security/proc-renewing-ca-certs-manually.adoc[leveloffset=+2]
+
+include::../../modules/security/proc-recovering-expired-ca-certs.adoc[leveloffset=+2]
+
+include::../../modules/security/proc-replacing-private-keys.adoc[leveloffset=+2]
+
+include::../../modules/security/proc-configuring-internal-clients-to-trust-cluster-ca.adoc[leveloffset=+1]
+
+include::../../modules/security/proc-configuring-external-clients-to-trust-cluster-ca.adoc[leveloffset=+1]
+
+//user-supplied certs
+include::assembly-using-your-own-certificates.adoc[leveloffset=+1]
+

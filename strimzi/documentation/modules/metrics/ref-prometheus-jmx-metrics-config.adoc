@@ -1,0 +1,46 @@
+:_mod-docs-content-type: REFERENCE
+
+
+// This assembly is included in the following assemblies:
+//
+// metrics/assembly-metrics-config-files.adoc
+
+[id='ref-jmx-metrics-prometheus-metrics-config-{context}']
+
+= Example Prometheus JMX Exporter metrics configuration
+
+[role="_abstract"]
+
+Grafana dashboards with Prometheus JMX Exporter are dependent on relabeling rules, which are defined for Strimzi components in the custom resource configuration.
+
+A label is a name-value pair.
+Relabeling is the process of writing a label dynamically.
+For example, the value of a label may be derived from the name of a Kafka server and client ID.
+
+.Example custom resources with metrics configuration
+[cols="3*",options="header",stripes="none"]
+|===
+|Component
+|Custom resource
+|Example YAML file
+
+|Kafka nodes
+|`Kafka`
+|`kafka-metrics.yaml`
+
+|Kafka Connect
+|`KafkaConnect`
+|`kafka-connect-metrics.yaml`
+
+|Kafka MirrorMaker 2
+|`KafkaMirrorMaker2`
+|`kafka-mirror-maker-2-metrics.yaml`
+
+|HTTP Bridge
+|`KafkaBridge`
+|`kafka-bridge-metrics.yaml`
+
+|Cruise Control
+|`Kafka`
+|`kafka-cruise-control-metrics.yaml`
+|===

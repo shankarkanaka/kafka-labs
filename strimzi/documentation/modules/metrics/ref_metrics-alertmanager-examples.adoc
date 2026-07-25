@@ -1,0 +1,40 @@
+:_mod-docs-content-type: REFERENCE
+
+// This assembly is included in the following assemblies:
+//
+// metrics/assembly-metrics-config-files.adoc
+
+[id='ref-metrics-alertmanager-examples-{context}']
+
+= Example Prometheus rules for alert notifications
+
+[role="_abstract"]
+Example Prometheus rules for alert notifications are provided with the xref:assembly-metrics-config-files-{context}[example metrics configuration files] provided by Strimzi.
+The rules are specified in the example `prometheus-rules` directory for use in a xref:proc-metrics-deploying-prometheus-{context}[Prometheus deployment].
+
+The `prometheus-rules` directory contains example rules for the following components:
+
+* Kafka
+* Entity Operator
+* Kafka Connect
+* HTTP Bridge
+* MirrorMaker2
+* Kafka Exporter
+
+A description of each of the example rules is provided in the file.
+
+Alerting rules provide notifications about specific conditions observed in metrics.
+Rules are declared on the Prometheus server, but Prometheus Alertmanager is responsible for alert notifications.
+
+Prometheus alerting rules describe conditions using https://prometheus.io/docs/prometheus/latest/querying/basics/[PromQL] expressions that are continuously evaluated.
+
+When an alert expression becomes true, the condition is met and the Prometheus server sends alert data to the Alertmanager.
+Alertmanager then sends out a notification using the communication method configured for its deployment.
+
+General points about the alerting rule definitions:
+
+* A `for` property is used with the rules to determine the period of time a condition must persist before an alert is triggered.
+* The availability of the `KafkaRunningOutOfSpace` metric and alert is dependent on the Kubernetes configuration and storage implementation used. Storage implementations for certain platforms may not be able to supply the information on available space required for the metric to provide an alert.
+
+Alertmanager can be configured to use email, chat messages or other notification methods.
+Adapt the default configuration of the example rules according to your specific needs.

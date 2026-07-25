@@ -1,0 +1,85 @@
+:_mod-docs-content-type: CONCEPT
+
+// Module included in the following assemblies:
+//
+// assembly-config.adoc
+
+[id='con-kafka-connect-config-{context}']
+= Configuring Kafka Connect
+
+[role="_abstract"]
+Configure your Kafka Connect deployment by updating the `spec` properties of the `KafkaConnect` custom resource.
+
+Start with a minimal configuration that defines the core requirements.
+Extend it with optional settings to support the following:
+
+* Securing connections (TLS and authentication)
+* Configuring Kafka Connect user authorization
+* Adding connector plugins by building a custom image
+* Tuning Kafka Connect worker settings
+* Enabling `KafkaConnector` resources to manage connectors
+* Running multiple Kafka Connect instances against the same Kafka cluster
+* xref:con-common-config-{context}[Common configuration], including resource limits and requests (recommended), JVM options, and metrics
+* xref:assembly-logging-configuration-{context}[Logging configuration]
+
+Certain settings, though optional, are recommended for production deployments, such as security and resource allocation.
+
+For details of all configuration options, see the link:{BookURLConfiguring}[Strimzi Custom Resource API Reference^].
+
+== Minimal configuration for Kafka Connect
+
+A minimal `KafkaConnect` resource requires the following in its spec:
+
+* `.spec.bootstrapServers`: The bootstrap address for the Kafka cluster.
+* `.spec.replicas`: The number of Kafka Connect worker pods to deploy.
+
+Depending on the CRD API version you use, you might also need to specify the Kafka Connect cluster group ID and internal topic names.
+For example, in the `v1` CRD API, the following properties are required:
+
+* `.spec.groupId`
+* `.spec.configStorageTopic`
+* `.spec.offsetStorageTopic`
+* `.spec.statusStorageTopic`
+
+If you want to manage connectors using `KafkaConnector` resources, add the `strimzi.io/use-connector-resources: "true"` annotation to the `KafkaConnect` resource.
+
+.Minimal configuration for KafkaConnect
+[source,yaml,subs="+quotes,attributes"]
+----
+# Basic configuration (required)
+apiVersion: {KafkaConnectApiVersion}
+kind: KafkaConnect
+metadata:
+  name: my-connect-cluster
+  annotations:
+    # Enables KafkaConnector resources
+    strimzi.io/use-connector-resources: "true"
+spec:
+  # Replicas (required)
+  replicas: 3
+  # Bootstrap servers (required)
+  bootstrapServers: my-cluster-kafka-bootstrap:9092
+  # The following properties are required in the `v1` CRD API.
+  groupId: my-connect-cluster
+  configStorageTopic: my-connect-cluster-configs
+  offsetStorageTopic: my-connect-cluster-offsets
+  statusStorageTopic: my-connect-cluster-status
+  # Kafka Connect worker configuration (optional)
+  config:
+    key.converter: org.apache.kafka.connect.json.JsonConverter
+    value.converter: org.apache.kafka.connect.json.JsonConverter
+    key.converter.schemas.enable: true
+    value.converter.schemas.enable: true
+----
+
+* `metadata.annotations.strimzi.io/use-connector-resources` enables the use of `KafkaConnector` resources to start, stop, and manage connector instances.
+* `spec.replicas` specifies the number of Kafka Connect worker replicas to run.
+* `spec.bootstrapServers` specifies the bootstrap address for the Kafka cluster.
+For a Strimzi-managed cluster, you can use the bootstrap service name, for example `<cluster_name>-kafka-bootstrap:<port>`.
+* `spec.groupId` identifies the Kafka Connect cluster group.
+This property is required in the `v1` CRD API.
+* `spec.configStorageTopic`, `spec.offsetStorageTopic`, and `spec.statusStorageTopic` specify the internal Kafka topics used by Kafka Connect.
+These properties are required in the `v1` CRD API.
+* `spec.config` defines Kafka Connect worker configuration, such as converters and internal topic replication factors.
+
+NOTE: The Kafka cluster does not need to be managed by Strimzi or run on Kubernetes.

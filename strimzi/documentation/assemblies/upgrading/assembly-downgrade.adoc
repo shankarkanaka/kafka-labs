@@ -1,0 +1,39 @@
+:_mod-docs-content-type: ASSEMBLY
+
+// This assembly is included in the following assemblies:
+//
+// deploying/deploying.adoc
+
+[id='assembly-downgrade-{context}']
+= Downgrading Strimzi
+
+[role="_abstract"]
+If you are encountering issues with the version of Strimzi you upgraded to,
+you can revert to a previous version.
+
+If you installed Strimzi using the YAML installation files, you can use the files from the previous release to perform the downgrade.
+
+Downgrading Strimzi involves two key steps:
+
+. Downgrading the Kafka cluster to a version supported by the target Cluster Operator (if required).
+. Downgrading the Cluster Operator to the previous release.
+
+If downgrading through multiple versions, you may need to repeat these steps.
+
+Always downgrade Kafka before the Cluster Operator to maintain compatibility.
+Ensure that the Kafka version you downgrade to is supported by the target Cluster Operator.
+The metadata version of the Kafka cluster must not be higher than the maximum version supported by the downgraded Kafka version.
+
+WARNING: The following downgrade instructions are only suitable if you installed Strimzi using the installation files. 
+If you installed Strimzi using another method, such as {OperatorHub}, downgrade may not be supported by that method unless specified in its documentation.
+
+//steps to downgrade Kafka
+include::../../modules/upgrading/proc-downgrade-kafka-kraft.adoc[leveloffset=+1]
+
+//kafka downgrade paths
+include::../../modules/upgrading/con-downgrade-paths.adoc[leveloffset=+1]
+
+//steps to downgrade the operators
+include::assembly-downgrade-cluster-operator.adoc[leveloffset=+1]
+
+

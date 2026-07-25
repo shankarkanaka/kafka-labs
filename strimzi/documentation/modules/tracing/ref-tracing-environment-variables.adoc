@@ -1,0 +1,48 @@
+:_mod-docs-content-type: REFERENCE
+
+// Module included in the following assemblies:
+//
+// assembly-distributed tracing.adoc
+
+[id='ref-tracing-environment-variables-{context}']
+= Environment variables for tracing
+
+[role="_abstract"]
+Use environment variables to enable tracing for Kafka components or to initialize a tracer for Kafka clients.
+
+Tracing environment variables are subject to change. 
+For the latest information, see the {OpenTelemetryDocs}.
+
+The following table describes the key environment variables for setting up tracing with OpenTelemetry. 
+
+.OpenTelemetry environment variables
+[cols="2m,1,2",options="header"]
+|===
+
+|Property
+|Required
+|Description
+
+|OTEL_SERVICE_NAME
+|Yes
+|The name of the tracing service for OpenTelemetry, such as OTLP or Jaeger.
+
+|OTEL_EXPORTER_OTLP_ENDPOINT
+|Yes (if using OTLP exporter)
+|The OTLP endpoint for exporting trace data to the tracing system.
+For Jaeger tracing, specify the `OTEL_EXPORTER_JAEGER_ENDPOINT`.
+For other tracing systems, xref:proc-enabling-tracing-type-{context}[specify the appropriate endpoint]. 
+
+|OTEL_TRACES_EXPORTER
+|No (unless using a non-OTLP exporter)
+|The exporter used for tracing. 
+The default is `otlp`, which does not need to be specified. 
+For Jaeger tracing, set this variable to `jaeger`. 
+For other tracing systems, xref:proc-enabling-tracing-type-{context}[specify the appropriate exporter].
+
+|OTEL_EXPORTER_OTLP_CERTIFICATE
+|No (required if using TLS with OTLP)
+|The path to the file containing trusted certificates for TLS authentication.
+Required to secure communication between Kafka components and the OpenTelemetry endpoint when using TLS with the `otlp` exporter.
+
+|===

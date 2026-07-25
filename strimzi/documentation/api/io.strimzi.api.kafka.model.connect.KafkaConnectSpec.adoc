@@ -1,0 +1,188 @@
+:_mod-docs-content-type: CONCEPT
+
+Configures a Kafka Connect cluster.
+
+[id='property-kafka-connect-internal-topics-grop-id-{context}']
+= Group ID and internal topics
+
+The group ID and the internal topics used by the Kafka Connect cluster are configured in the `.spec` section of the `KafkaConnect` resource
+
+.Example group ID and internal topics configuration
+[source,yaml,subs="attributes+"]
+----
+apiVersion: {KafkaConnectApiVersion}
+kind: KafkaConnect
+metadata:
+  name: my-connect
+spec:
+  # ...
+  groupId: my-connect-group
+  configStorageTopic: my-config-topic
+  offsetStorageTopic: my-offset-topic
+  statusStorageTopic: my-status-topic
+  # ...
+----
+
+These fields are required.
+
+If you do not set them, the following default values apply:
+
+* `groupId` defaults to `connect-cluster`
+* `configStorageTopic` defaults to `connect-cluster-configs`
+* `offsetStorageTopic` defaults to `connect-cluster-offsets`
+* `statusStorageTopic` defaults to `connect-cluster-status`
+
+[id='property-kafka-connect-additional-configuration-{context}']
+= Additional configuration
+
+The `config` properties are one part of the overall configuration for the resource.
+Use the `config` properties to configure additional Kafka Connect options as keys.
+
+.Example Kafka Connect configuration
+[source,yaml,subs="attributes+"]
+----
+apiVersion: {KafkaConnectApiVersion}
+kind: KafkaConnect
+metadata:
+  name: my-connect
+spec:
+  # ...
+  config:
+    key.converter: org.apache.kafka.connect.json.JsonConverter
+    value.converter: org.apache.kafka.connect.json.JsonConverter
+    key.converter.schemas.enable: true
+    value.converter.schemas.enable: true
+    config.storage.replication.factor: 3
+    offset.storage.replication.factor: 3
+    status.storage.replication.factor: 3
+  # ...
+----
+
+The values can be one of the following JSON types:
+
+* String
+* Number
+* Boolean
+
+Certain options have default values:
+
+* `key.converter` with default value `org.apache.kafka.connect.json.JsonConverter`
+* `value.converter` with default value `org.apache.kafka.connect.json.JsonConverter`
+
+These options are automatically configured in case they are not present in the `KafkaConnect.spec.config` properties.
+
+*Exceptions*
+
+You can specify and configure the options listed in the link:{ApacheKafkaDocsBase}configuration/kafka-connect-configs/[Kafka Connect configuration documentation^].
+
+However, Strimzi takes care of configuring and managing options related to the following, which cannot be changed:
+
+* Kafka cluster bootstrap address
+* Security (encryption, authentication, and authorization)
+* Listener and REST interface configuration
+* Plugin path configuration
+
+Properties with the following prefixes cannot be set:
+
+* `bootstrap.servers`
+* `consumer.interceptor.classes`
+* `listeners.`
+* `plugin.path`
+* `producer.interceptor.classes`
+* `rest.`
+* `sasl.`
+* `security.`
+* `ssl.`
+
+If the `config` property contains an option that cannot be changed, it is disregarded, and a warning message is logged to the Cluster Operator log file.
+All other supported options are forwarded to Kafka Connect, including the following exceptions to the options configured by Strimzi:
+
+* Any `ssl` configuration for xref:con-common-configuration-ssl-reference[supported TLS versions and cipher suites]
+
+IMPORTANT: The Cluster Operator does not validate keys or values in the `config` object provided.
+If an invalid configuration is provided, the Kafka Connect cluster might not start or might become unstable.
+In this case, fix the configuration so that the Cluster Operator can roll out the new configuration to all Kafka Connect nodes.
+
+[id='property-kafka-connect-logging-{context}']
+= Logging
+
+Kafka Connect has its own preconfigured loggers:
+
+[cols="1m,2,1",options="header"]
+|===
+| Logger      | Description                                                         | Default Level
+
+| rootLogger  | Default logger for all classes                                      | INFO
+| reflections | Logs classpath scanning and metadata discovery used to find plugins | ERROR
+|===
+
+Further loggers are added depending on the Kafka Connect plugins running.
+
+Use a curl request to get a complete list of Kafka Connect loggers running from any Kafka broker pod:
+
+[source,curl,subs=attributes+]
+----
+curl -s http://<connect-cluster-name>-connect-api:8083/admin/loggers/
+----
+
+Kafka Connect uses the Apache `log4j2` logger implementation.
+Use the `logging` property to configure loggers and logger levels.
+
+You can set log levels using either the `inline` or `external` logging configuration types.
+
+Specify loggers and levels directly in the custom resource for inline configuration:
+
+.Example inline logging configuration
+[source,yaml,subs="+quotes,attributes"]
+----
+apiVersion: {KafkaConnectApiVersion}
+kind: KafkaConnect
+spec:
+  # ...
+  logging:
+    type: inline
+    loggers:
+      rootLogger.level: INFO
+      logger.reflections.level: DEBUG
+  # ...
+----
+
+You can define additional loggers by specifying the full class or package name using `logger.<name>.name`.
+For example, to configure logging for Kafka Connect runtime classes inline:
+
+.Example custom inline loggers
+[source,yaml]
+----
+# ...
+logger.sourcetask.name: org.apache.kafka.connect.runtime.WorkerSourceTask # <1>
+logger.sourcetask.level: TRACE # <2>
+logger.sinktask.name: org.apache.kafka.connect.runtime.WorkerSinkTask # <3>
+logger.sinktask.level: DEBUG # <4>
+----
+<1> Creates a logger for the runtime `WorkerSourceTask` class.
+<2> Sets the logging level for `WorkerSourceTask`.
+<3> Creates a logger for the runtime `WorkerSinkTask` class.
+<4> Sets the logging level for `WorkerSinkTask`.
+
+Alternatively, you can reference an external `ConfigMap` containing a complete `log4j2.properties` file that defines your own log4j2 configuration, including loggers, appenders, and layout configuration:
+
+.Example external logging configuration
+[source,yaml,subs="+quotes,attributes"]
+----
+apiVersion: {KafkaConnectApiVersion}
+kind: KafkaConnect
+spec:
+  # ...
+  logging:
+    type: external
+    valueFrom:
+      configMapKeyRef:
+        # name and key are mandatory
+        name: customConfigMap
+        key: log4j2.properties
+  # ...
+----
+
+.Garbage collector (GC)
+
+Garbage collector logging can also be enabled (or disabled) using the xref:con-common-configuration-garbage-collection-reference[`jvmOptions` property].

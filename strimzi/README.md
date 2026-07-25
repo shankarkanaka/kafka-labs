@@ -1,0 +1,171 @@
+[![Strimzi](./documentation/logo/strimzi.png)](https://strimzi.io/)
+
+# Run Apache Kafka on Kubernetes and OpenShift
+
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/strimzi/strimzi-kafka-operator/badge)](https://scorecard.dev/viewer/?uri=github.com/strimzi/strimzi-kafka-operator)
+[![Build Status](https://github.com/strimzi/strimzi-kafka-operator/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/strimzi/strimzi-kafka-operator/actions/workflows/build.yml?query=branch%3Amain)
+[![GitHub release](https://img.shields.io/github/release/strimzi/strimzi-kafka-operator.svg)](https://github.com/strimzi/strimzi-kafka-operator/releases/latest)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0)
+[![Twitter Follow](https://img.shields.io/twitter/follow/strimziio?style=social)](https://twitter.com/strimziio)
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/strimzi-kafka-operator)](https://artifacthub.io/packages/search?repo=strimzi-kafka-operator)
+
+Strimzi provides a way to run an [Apache Kafka®][kafka] cluster on 
+[Kubernetes][k8s] or [OpenShift][os] in various deployment configurations.
+See our [website][strimzi] for more details about the project.
+
+## Quick Starts
+
+To get up and running quickly, check our [Quick Start for Minikube, OKD (OpenShift Origin) and Kubernetes Kind](https://strimzi.io/quickstarts/). 
+
+## Documentation
+
+Documentation for the current _main_ branch as well as all releases can be found on our [website][strimzi].
+
+## Roadmap
+
+The roadmap of the Strimzi Operator project is maintained as [GitHub Project](https://github.com/orgs/strimzi/projects/4).
+
+## Getting help
+
+If you encounter any issues while using Strimzi, you can get help using:
+
+- [#strimzi channel on CNCF Slack](https://slack.cncf.io/)
+- [Strimzi Users mailing list](https://lists.cncf.io/g/cncf-strimzi-users/topics)
+- [GitHub Discussions](https://github.com/strimzi/strimzi-kafka-operator/discussions)
+
+## Strimzi Community Meetings
+
+You can join our regular community meetings:
+* Thursday 9:00 AM UTC (every 4 weeks) - [convert to your timezone](https://www.thetimezoneconverter.com/?t=9%3A00&tz=UTC)
+* Thursday 4:00 PM UTC (every 4 weeks, offset by 2 weeks from above meeting) - [convert to your timezone](https://www.thetimezoneconverter.com/?t=16%3A00&tz=UTC)
+
+Resources:
+* [Meeting minutes, agenda and Zoom link](https://docs.google.com/document/d/1V1lMeMwn6d2x1LKxyydhjo2c_IFANveelLD880A6bYc/edit#heading=h.vgkvn1hr5uor)
+* [Recordings](https://youtube.com/playlist?list=PLpI4X8PMthYfONZopcRd4X_stq1C14Rtn)
+* [Calendar](https://zoom-lfx.platform.linuxfoundation.org/meetings/strimzi) ([Subscribe to the calendar](https://webcal.prod.itx.linuxfoundation.org/lfx/a092M00001JWrBrQAL))
+
+## Contributing
+
+You can contribute by:
+
+- Raising issues you find while using Strimzi
+- Fixing issues by opening Pull Requests
+- Improving Strimzi documentation
+- Talking about Strimzi
+
+All bugs, tasks or enhancements are tracked as [GitHub issues](https://github.com/strimzi/strimzi-kafka-operator/issues). Issues which 
+might be a good start for new contributors are marked with ["good-start"](https://github.com/strimzi/strimzi-kafka-operator/labels/good-start)
+label.
+
+The [development guide](development-docs/DEV_GUIDE.md) describes how to quickly get set up to build Strimzi from source.
+Before submitting a patch, make sure you understand how to test your changes by reading the [Test guide](development-docs/TESTING.md).
+The [release checklist](development-docs/RELEASE.md) describes the steps needed for a new version release.
+The [documentation contributor guide](https://strimzi.io/contributing/guide/) describes how to contribute to Strimzi documentation.
+
+### Developer Certificate of Origin
+
+The [Developer Certificate of Origin (DCO)](https://developercertificate.org/) is a lightweight way for contributors to certify that they wrote or otherwise have the right to submit the code they are contributing to the project.
+All commits must be signed off by adding a `Signed-off-by` line to the commit message.
+
+```shell
+This is my commit message
+
+Signed-off-by: John Doe <JohnDoe@somewhere.org>
+```
+
+Git has a `-s` option to append this automatically:
+
+```shell
+git commit -s -m 'This is my commit message'
+```
+
+If you have already made a commit and forgot to include the sign-off, you can amend your last commit:
+
+```shell
+git commit --amend -s
+```
+
+If you want to get in touch with us first before contributing, you can use:
+
+- [#strimzi channel on CNCF Slack](https://slack.cncf.io/)
+- [Strimzi Dev mailing list](https://lists.cncf.io/g/cncf-strimzi-dev/topics)
+
+## License
+Strimzi is licensed under the [Apache License](./LICENSE), Version 2.0
+
+## Community Testing
+
+### Linux on IBM Z (s390x)
+
+[![Jenkins](https://ibmz-ci.osuosl.org/job/Strimzi_Kafka_Operator_IBMZ_CI/badge/icon)](https://ibmz-ci.osuosl.org/job/Strimzi_Kafka_Operator_IBMZ_CI/)
+
+_Note: This badge represents a community-led initiative and is not officially endorsed by the Strimzi project maintainers._
+
+## Container signatures
+
+From the 0.38.0 release, Strimzi containers are signed using the [`cosign` tool](https://github.com/sigstore/cosign).
+Strimzi uses keyless signing since 0.49.0 release. 
+To verify the container, you can run the following command:
+
+```shell
+cosign verify --certificate-identity-regexp='https://github.com/strimzi/.*' \
+    --certificate-oidc-issuer='https://token.actions.githubusercontent.com' \
+    quay.io/strimzi/operator:latest
+```
+
+In case you want to verify containers of older version of Strimzi than 0.49.0, then use our public key:
+
+```
+-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAET3OleLR7h0JqatY2KkECXhA9ZAkC
+TRnbE23Wb5AzJPnpevvQ1QUEQQ5h/I4GobB7/jkGfqYkt6Ct5WOU2cc6HQ==
+-----END PUBLIC KEY-----
+```
+
+And use it to verify the signature:
+
+```shell
+cosign verify --key strimzi.pub quay.io/strimzi/operator:latest --insecure-ignore-tlog=true
+```
+
+## Software Bill of Materials (SBOM)
+
+From the 0.38.0 release, Strimzi publishes the software bill of materials (SBOM) of our containers.
+The SBOMs are published as an archive with `SPDX-JSON` and `Syft-Table` formats signed using cosign.
+For releases, they are also pushed into the container registry.
+
+Strimzi uses keyless signing since 0.49.0 release.
+To verify the SBOM signatures, you can run the following command:
+
+```shell
+cosign verify-blob --bundle <SBOM-file>.bundle \
+    --certificate-identity-regexp='https://github.com/strimzi/.*' \
+    --certificate-oidc-issuer='https://token.actions.githubusercontent.com' \
+    <SBOM-file>
+```
+
+In case you want to verify SBOM signatures of older version of Strimzi than 0.49.0, then use our public key:
+
+```
+-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAET3OleLR7h0JqatY2KkECXhA9ZAkC
+TRnbE23Wb5AzJPnpevvQ1QUEQQ5h/I4GobB7/jkGfqYkt6Ct5WOU2cc6HQ==
+-----END PUBLIC KEY-----
+```
+
+You can use it to verify the signature of the SBOM files with the following command:
+
+```shell
+cosign verify-blob --key cosign.pub --bundle <SBOM-file>.bundle --insecure-ignore-tlog=true <SBOM-file>
+```
+
+---
+
+Strimzi is a <a href="http://cncf.io">Cloud Native Computing Foundation</a> incubating project.
+
+![CNCF ><](./documentation/logo/cncf-color.png)
+
+[strimzi]: https://strimzi.io "Strimzi"
+[kafka]: https://kafka.apache.org "Apache Kafka"
+[k8s]: https://kubernetes.io/ "Kubernetes"
+[os]: https://www.openshift.com/ "OpenShift"

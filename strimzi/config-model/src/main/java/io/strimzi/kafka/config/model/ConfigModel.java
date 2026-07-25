@@ -1,0 +1,375 @@
+/*
+ * Copyright Strimzi authors.
+ * License: Apache License 2.0 (see the file LICENSE or http://apache.org/licenses/LICENSE-2.0.html).
+ */
+package io.strimzi.kafka.config.model;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+
+import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
+
+/**
+ * A model of a particular configuration parameter.
+ */
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class ConfigModel {
+    private Scope scope;
+    private Type type;
+    private Number minimum;
+    private Number maximum;
+    private List<String> items;
+    @JsonProperty("enum")
+    private List<String> values;
+    private String pattern;
+    @JsonInclude(JsonInclude.Include.NON_DEFAULT)
+    private boolean caseInsensitive = false;
+
+    /**
+     * Constructor
+     */
+    public ConfigModel() { }
+
+    /**
+     * Gets the scope of the parameter.
+     *
+     * @return The scope of the parameter.
+     */
+    public Scope getScope() {
+        return scope;
+    }
+
+    /**
+     * Sets the scope of the parameter
+     *
+     * @param scope Scope of the parameter
+     */
+    public void setScope(Scope scope) {
+        this.scope = scope;
+    }
+
+    /**
+     * Gets the type of the parameter.
+     *
+     * @return  Type of the parameter
+     */
+    public Type getType() {
+        return type;
+    }
+
+    /**
+     * Sets the type of the parameter
+     *
+     * @param type  Type of the parameter
+     */
+    public void setType(Type type) {
+        this.type = type;
+    }
+
+    /**
+     * Gets the inclusive minimum value for a parameter of numeric type.
+     *
+     * @return Inclusive minimum for a parameter of numeric type.
+     */
+    public Number getMinimum() {
+        return minimum;
+    }
+
+    /**
+     * Sets the minimum value of the parameter
+     *
+     * @param minimum   Minimum value of the parameter
+     */
+    public void setMinimum(Number minimum) {
+        this.minimum = minimum;
+    }
+
+    /**
+     * Gets the inclusive maximum value for a parameter of numeric type.
+     *
+     * @return Inclusive maximum for a parameter of numeric type.
+     */
+    public Number getMaximum() {
+        return maximum;
+    }
+
+    /**
+     * Sets the maximum value of the parameter
+     *
+     * @param maximum   Maximum value of the parameter
+     */
+    public void setMaximum(Number maximum) {
+        this.maximum = maximum;
+    }
+
+    /**
+     * Gets the allowed items for the parameter value.
+     *
+     * @return The allowed items for the parameter value, for parameters of list type.
+     */
+    public List<String> getItems() {
+        return items;
+    }
+
+    /**
+     * Sets the allowed items for a list parameter
+     *
+     * @param items Allowed items
+     */
+    public void setItems(List<String> items) {
+        this.items = items;
+    }
+
+    /**
+     * Gets the allowed values for the parameter value.
+     *
+     * @return The allowed values for the parameter value, for parameters of string type.
+     */
+    public List<String> getValues() {
+        return values;
+    }
+
+    /**
+     * Sets the allowed values of String parameter
+     *
+     * @param values    Allowed values
+     */
+    public void setValues(List<String> values) {
+        this.values = values;
+    }
+
+    /**
+     * Gets the regular expression which values must match.
+     *
+     * @return A regular expression which values must match, for parameters of string type.
+     */
+    public String getPattern() {
+        return pattern;
+    }
+
+    /**
+     * Sets the pattern of the parameter
+     *
+     * @param pattern   Pattern
+     */
+    public void setPattern(String pattern) {
+        this.pattern = pattern;
+    }
+
+    /**
+     * Gets whether the option is case insensitive.
+     *
+     * @return  Flag indicating whether the option is case sensitive ot not
+     */
+    public boolean getCaseInsensitive() {
+        return caseInsensitive;
+    }
+
+    /**
+     * Sets the flag indicating whether the option is case sensitive ot not
+     *
+     * @param caseInsensitive   Flag indicating if the value is case sensitive or not
+     */
+    public void setCaseInsensitive(boolean caseInsensitive) {
+        this.caseInsensitive = caseInsensitive;
+    }
+
+    /**
+     * Validates the option
+     *
+     * @param configName    Name of the option
+     * @param value         Value of the option
+     *
+     * @return  List of errors found during the validation. Empty if no errors were found.
+     */
+    public List<String> validate(String configName, String value) {
+        return switch (getType()) {
+            case BOOLEAN -> validateBoolean(configName, value);
+            case STRING -> validateString(configName, value);
+            case INT -> validateInt(configName, value);
+            case LONG -> validateLong(configName, value);
+            case DOUBLE -> validateDouble(configName, value);
+            case SHORT -> validateShort(configName, value);
+            case CLASS, PASSWORD -> emptyList();
+            case LIST -> validateList(configName, value);
+        };
+    }
+
+    private List<String> validateString(String configName, String value) {
+        List<String> errors = emptyList();
+
+        if (getValues() != null)    {
+            if (getCaseInsensitive())   {
+                // It is case-insensitive value
+                //     => we convert the String to upper case as that is what the Kafka validator does
+                if (!getValues().contains(value.toUpperCase(Locale.ROOT))) {
+                    errors = new ArrayList<>(1);
+                    errors.add(configName + " has value '" + value + "' which is not one of the allowed values (case-insensitive): " + getValues());
+                }
+            } else {
+                // It is case-sensitive value => we validate it as it is
+                if (!getValues().contains(value)) {
+                    errors = new ArrayList<>(1);
+                    errors.add(configName + " has value '" + value + "' which is not one of the allowed values: " + getValues());
+                }
+            }
+        }
+
+        if (getPattern() != null
+                && !value.matches(getPattern())) {
+            if (errors.isEmpty()) {
+                errors = new ArrayList<>(1);
+            }
+            errors.add(configName + " has value '" + value + "' which does not match the required pattern: " + getPattern());
+        }
+
+        return errors;
+    }
+
+    private List<String> validateBoolean(String configName, String value) {
+        if (!value.matches("true|false")) {
+            return List.of(configName + " has value '" + value + "' which is not a boolean");
+        }
+        return emptyList();
+    }
+
+    private List<String> validateList(String configName, String value) {
+        List<String> l = asList(value.trim().split(" *, *", -1));
+
+        // Check for duplicate values as within Kafka ConfigDef.ValidList
+        if (Set.copyOf(l).size() != l.size()) {
+            return List.of(configName + " contains duplicate values");
+        }
+
+        // Check for empty individual values as within Kafka ConfigDef.ValidList
+        for (String item : l) {
+            if (item.isEmpty()) {
+                return List.of(configName + " contains empty values");
+            }
+        }
+
+        // Only validate against allowed items if the list is not null and not empty.
+        if (getItems() != null && !getItems().isEmpty()) {
+            HashSet<String> items = new HashSet<>(l);
+            items.removeAll(getItems());
+            if (!items.isEmpty()) {
+                return List.of(configName + " contains values " + items + " which are not in the allowed items " + getItems());
+            }
+        }
+        return emptyList();
+    }
+
+    private List<String> validateDouble(String configName, String value) {
+        List<String> errors = emptyList();
+        try {
+            double i = Double.parseDouble(value);
+            if (getMinimum() != null
+                    && i < getMinimum().doubleValue()) {
+                errors = new ArrayList<>(1);
+                errors.add(minimumErrorMsg(configName, value));
+            }
+            if (getMaximum() != null
+                    && i > getMaximum().doubleValue()) {
+                if (errors.isEmpty()) {
+                    errors = new ArrayList<>(1);
+                }
+                errors.add(maximumErrorMsg(configName, value));
+            }
+        } catch (NumberFormatException e) {
+            errors = List.of(numFormatMsg(configName, value, "a double"));
+        }
+        return errors;
+    }
+
+    private List<String> validateLong(String configName, String value) {
+        List<String> errors = emptyList();
+        try {
+            long i = Long.parseLong(value);
+            if (getMinimum() != null
+                    && i < getMinimum().longValue()) {
+                errors = new ArrayList<>(1);
+                errors.add(minimumErrorMsg(configName, value));
+            }
+            if (getMaximum() != null
+                    && i > getMaximum().longValue()) {
+                if (errors.isEmpty()) {
+                    errors = new ArrayList<>(1);
+                }
+                errors.add(maximumErrorMsg(configName, value));
+            }
+        } catch (NumberFormatException e) {
+            errors = List.of(numFormatMsg(configName, value, "a long"));
+        }
+        return errors;
+    }
+
+    private List<String> validateShort(String configName, String value) {
+        List<String> errors = emptyList();
+        try {
+            short i = Short.parseShort(value);
+            if (getMinimum() != null
+                    && i < getMinimum().shortValue()) {
+                errors = new ArrayList<>(1);
+                errors.add(minimumErrorMsg(configName, value));
+            }
+            if (getMaximum() != null
+                    && i > getMaximum().shortValue()) {
+                if (errors.isEmpty()) {
+                    errors = new ArrayList<>(1);
+                }
+                errors.add(maximumErrorMsg(configName, value));
+            }
+        } catch (NumberFormatException e) {
+            errors = List.of(numFormatMsg(configName, value, "a short"));
+        }
+        return errors;
+    }
+
+    private List<String> validateInt(String configName, String value) {
+        List<String> errors = emptyList();
+        try {
+            int i = Integer.parseInt(value);
+            if (getMinimum() != null
+                    && i < getMinimum().intValue()) {
+                errors = new ArrayList<>(1);
+                errors.add(minimumErrorMsg(configName, value));
+            }
+            if (getMaximum() != null
+                    && i > getMaximum().intValue()) {
+                if (errors.isEmpty()) {
+                    errors = new ArrayList<>(1);
+                }
+                errors.add(maximumErrorMsg(configName, value));
+            }
+            if (getPattern() != null
+                    && !value.matches(getPattern())) {
+                if (errors.isEmpty()) {
+                    errors = new ArrayList<>(1);
+                }
+                errors.add(configName + " has value '" + value + "' which does not match the required pattern: " + getPattern());
+            }
+        } catch (NumberFormatException e) {
+            errors = List.of(numFormatMsg(configName, value, "an int"));
+        }
+        return errors;
+    }
+
+    private String minimumErrorMsg(String configName, String value) {
+        return configName + " has value " + value + " which less than the minimum value " + getMinimum();
+    }
+
+    private String maximumErrorMsg(String configName, String value) {
+        return configName + " has value " + value + " which greater than the maximum value " + getMaximum();
+    }
+
+    private String numFormatMsg(String configName, String value, String typeDescription) {
+        return configName + " has value '" + value + "' which is not " + typeDescription;
+    }
+}

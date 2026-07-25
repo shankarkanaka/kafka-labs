@@ -1,0 +1,465 @@
+/*
+ * Copyright Strimzi authors.
+ * License: Apache License 2.0 (see the file LICENSE or http://apache.org/licenses/LICENSE-2.0.html).
+ */
+package io.strimzi.systemtest.specific;
+
+import io.fabric8.kubernetes.api.model.Affinity;
+import io.fabric8.kubernetes.api.model.NodeAffinity;
+import io.fabric8.kubernetes.api.model.NodeSelectorRequirement;
+import io.fabric8.kubernetes.api.model.Pod;
+import io.skodjob.kubetest4j.resources.KubeResourceManager;
+import io.strimzi.api.kafka.model.common.template.ContainerEnvVarBuilder;
+import io.strimzi.api.kafka.model.connect.KafkaConnectResources;
+import io.strimzi.api.kafka.model.kafka.KafkaResources;
+import io.strimzi.api.kafka.model.mirrormaker2.KafkaMirrorMaker2Resources;
+import io.strimzi.operator.common.Annotations;
+import io.strimzi.systemtest.AbstractST;
+import io.strimzi.systemtest.Environment;
+import io.strimzi.systemtest.TestConstants;
+import io.strimzi.systemtest.annotations.ParallelNamespaceTest;
+import io.strimzi.systemtest.kafkaclients.internalClients.admin.AdminClient;
+import io.strimzi.systemtest.labels.LabelSelectors;
+import io.strimzi.systemtest.resources.operator.SetupClusterOperator;
+import io.strimzi.systemtest.storage.TestStorage;
+import io.strimzi.systemtest.templates.crd.KafkaConnectTemplates;
+import io.strimzi.systemtest.templates.crd.KafkaConnectorTemplates;
+import io.strimzi.systemtest.templates.crd.KafkaMirrorMaker2Templates;
+import io.strimzi.systemtest.templates.crd.KafkaNodePoolTemplates;
+import io.strimzi.systemtest.templates.crd.KafkaTemplates;
+import io.strimzi.systemtest.templates.crd.KafkaTopicTemplates;
+import io.strimzi.systemtest.utils.AdminClientUtils;
+import io.strimzi.systemtest.utils.ClientUtils;
+import io.strimzi.systemtest.utils.StUtils;
+import io.strimzi.systemtest.utils.kafkaUtils.KafkaConnectUtils;
+import io.strimzi.systemtest.utils.kubeUtils.controllers.StrimziPodSetUtils;
+import io.strimzi.systemtest.utils.kubeUtils.objects.PodUtils;
+import io.strimzi.testclients.clients.kafka.KafkaAdminClient;
+import io.strimzi.testclients.clients.kafka.KafkaAdminClientBuilder;
+import io.strimzi.testclients.clients.kafka.KafkaConsumerClient;
+import io.strimzi.testclients.clients.kafka.KafkaConsumerClientBuilder;
+import io.strimzi.testclients.clients.kafka.KafkaProducerConsumer;
+import io.strimzi.testclients.clients.kafka.KafkaProducerConsumerBuilder;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import static io.strimzi.systemtest.TestTags.CONNECT;
+import static io.strimzi.systemtest.TestTags.MIRROR_MAKER2;
+import static io.strimzi.systemtest.TestTags.REGRESSION;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
+
+@Tag(REGRESSION)
+class RackAwarenessST extends AbstractST {
+    private static final Logger LOGGER = LogManager.getLogger(RackAwarenessST.class);
+    private static final String TOPOLOGY_KEY = "kubernetes.io/hostname";
+
+    /**
+     * @description This test case verifies that Rack awareness configuration works as expected in Kafka Cluster.
+     *
+     * @steps
+     *  1. - Deploy Kafka Clusters with rack topology key and also 'replica.selector.class' configured to rack aware value.
+     *     - Kafka Clusters is deployed with according configuration in pod affinity, consumer client rack, and additional expected labels.
+     *  2. - Make sure Kafka works as expected by producing and consuming data.
+     *     - Data are successfully produced and consumed from Kafka Clusters.
+     *
+     * @usecase
+     *  - rack-awareness
+     *  - configuration
+     *  - kafka
+     *  - labels
+     */
+    @ParallelNamespaceTest
+    void testKafkaRackAwareness() {
+        Assumptions.assumeFalse(Environment.isNamespaceRbacScope());
+
+        final TestStorage testStorage = new TestStorage(KubeResourceManager.get().getTestContext());
+
+        KubeResourceManager.get().createResourceWithWait(
+            KafkaNodePoolTemplates.brokerPoolPersistentStorage(testStorage.getNamespaceName(), testStorage.getBrokerPoolName(), testStorage.getClusterName(), 1).build(),
+            KafkaNodePoolTemplates.controllerPoolPersistentStorage(testStorage.getNamespaceName(), testStorage.getControllerPoolName(), testStorage.getClusterName(), 1).build()
+        );
+        KubeResourceManager.get().createResourceWithWait(KafkaTemplates.kafka(testStorage.getNamespaceName(), testStorage.getClusterName(), 1)
+                .editSpec()
+                    .editKafka()
+                        .withNewTopologyLabelRack()
+                            .withTopologyKey(TOPOLOGY_KEY)
+                        .endTopologyLabelRack()
+                        .addToConfig("replica.selector.class", "org.apache.kafka.common.replica.RackAwareReplicaSelector")
+                    .endKafka()
+                .endSpec()
+                .build());
+
+        LOGGER.info("Kafka cluster deployed successfully");
+        String podName = PodUtils.getPodNameByPrefix(testStorage.getNamespaceName(), testStorage.getBrokerComponentName());
+        Pod pod = KubeResourceManager.get().kubeClient().getClient().pods().inNamespace(testStorage.getNamespaceName()).withName(podName).get();
+
+        final KafkaAdminClient kafkaAdminClient = new KafkaAdminClientBuilder()
+            .withBootstrapAddress(KafkaResources.plainBootstrapAddress(testStorage.getClusterName()))
+            .withName(testStorage.getAdminName())
+            .withNamespaceName(testStorage.getNamespaceName())
+            .build();
+
+        KubeResourceManager.get().createResourceWithWait(kafkaAdminClient.getDeployment());
+
+        final AdminClient adminClient = AdminClientUtils.getConfiguredAdminClient(testStorage.getNamespaceName(), testStorage.getAdminName());
+
+        // check that spec matches the actual pod configuration
+        Affinity specAffinity = StrimziPodSetUtils.getStrimziPodSetAffinity(testStorage.getNamespaceName(), testStorage.getBrokerComponentName());
+        NodeSelectorRequirement specNodeRequirement = specAffinity.getNodeAffinity().getRequiredDuringSchedulingIgnoredDuringExecution().getNodeSelectorTerms().get(0).getMatchExpressions().get(0);
+        NodeAffinity podAffinity = pod.getSpec().getAffinity().getNodeAffinity();
+        NodeSelectorRequirement podNodeRequirement = podAffinity.getRequiredDuringSchedulingIgnoredDuringExecution().getNodeSelectorTerms().get(0).getMatchExpressions().get(0);
+        assertThat(podNodeRequirement, is(specNodeRequirement));
+        assertThat(specNodeRequirement.getKey(), is(TOPOLOGY_KEY));
+        assertThat(specNodeRequirement.getOperator(), is("Exists"));
+
+        // check Kafka rack awareness configuration
+        String podNodeName = pod.getSpec().getNodeName();
+        String hostname = podNodeName.contains(".") ? podNodeName.substring(0, podNodeName.indexOf(".")) : podNodeName;
+
+        String nodeDescription = adminClient.describeNodes("all");
+        assertThat(AdminClientUtils.getRack(nodeDescription, "0").contains(hostname), is(true));
+
+        LOGGER.info("Producing and Consuming data in the Kafka cluster: {}/{}", testStorage.getNamespaceName(), testStorage.getClusterName());
+        final KafkaProducerConsumer kafkaProducerConsumer = new KafkaProducerConsumerBuilder()
+            .withProducerName(testStorage.getProducerName())
+            .withConsumerName(testStorage.getConsumerName())
+            .withNamespaceName(testStorage.getNamespaceName())
+            .withTopicName(testStorage.getTopicName())
+            .withConsumerGroup(ClientUtils.generateRandomConsumerGroup())
+            .withBootstrapAddress(KafkaResources.plainBootstrapAddress(testStorage.getClusterName()))
+            .withMessageCount(testStorage.getMessageCount())
+            .build();
+
+        KubeResourceManager.get().createResourceWithWait(
+            kafkaProducerConsumer.getProducer().getJob(),
+            kafkaProducerConsumer.getConsumer().getJob()
+        );
+
+        ClientUtils.waitForClientsSuccess(testStorage.getNamespaceName(), testStorage.getConsumerName(), testStorage.getProducerName(), testStorage.getMessageCount());
+    }
+
+    /**
+     * @description This test case verifies that Rack awareness configuration works as expected in KafkaConnect. This is done by trying to deploy 2 Kafka Connect
+     * Clusters; First one with valid topology key configuration, which will be scheduled and eventually progress into ready state, while invalid configuration
+     * of the second Kafka Connect will render second Cluster unschedulable.
+     *
+     * @steps
+     *  1. - Deploy Kafka Clusters, with 1 replica.
+     *     - Kafka Clusters and its components are deployed.
+     *  2. - Deploy Kafka Connect cluster, with rack topology key set to invalid value.
+     *     - Kafka Connect is not scheduled.
+     *  3. - Deploy Kafka Connect cluster, with rack topology key set to valid value.
+     *     - Kafka Connect cluster is scheduled and eventually becomes ready, with its pod having all expected configuration in place.
+     *  4. - Deploy Sink Kafka Connector and Produce 100 messages into the observed topic.
+     *     - Messages are handled by Sink Connector successfully, thereby confirming Connect Cluster and Connector work correctly.
+     *
+     * @usecase
+     *  - rack-awareness
+     *  - configuration
+     *  - connect
+     */
+    @Tag(CONNECT)
+    @ParallelNamespaceTest
+    void testConnectRackAwareness() {
+        Assumptions.assumeFalse(Environment.isNamespaceRbacScope());
+
+        final TestStorage testStorage = new TestStorage(KubeResourceManager.get().getTestContext());
+        final String invalidTopologyKey = "invalid-topology-key";
+        final String invalidConnectClusterName = testStorage.getClusterName() + "-invalid";
+
+        KubeResourceManager.get().createResourceWithWait(
+            KafkaNodePoolTemplates.brokerPoolPersistentStorage(testStorage.getNamespaceName(), testStorage.getBrokerPoolName(), testStorage.getClusterName(), 1).build(),
+            KafkaNodePoolTemplates.controllerPoolPersistentStorage(testStorage.getNamespaceName(), testStorage.getControllerPoolName(), testStorage.getClusterName(), 1).build()
+        );
+        KubeResourceManager.get().createResourceWithWait(KafkaTemplates.kafka(testStorage.getNamespaceName(), testStorage.getClusterName(), 1).build());
+
+        LOGGER.info("Deploying unschedulable KafkaConnect: {}/{} with an invalid topology key: {}", testStorage.getNamespaceName(), invalidConnectClusterName, invalidTopologyKey);
+        KubeResourceManager.get().createResourceWithoutWait(KafkaConnectTemplates.kafkaConnect(testStorage.getNamespaceName(), invalidConnectClusterName, testStorage.getClusterName(), 1)
+                .editSpec()
+                    .withNewTopologyLabelRack()
+                        .withTopologyKey(invalidTopologyKey)
+                    .endTopologyLabelRack()
+                .endSpec()
+                .build());
+
+        LOGGER.info("Deploying KafkaConnect: {}/{} with a valid topology key: {}", testStorage.getNamespaceName(), testStorage.getClusterName(), TOPOLOGY_KEY);
+        KubeResourceManager.get().createResourceWithoutWait(KafkaConnectTemplates.kafkaConnectWithFilePlugin(testStorage.getNamespaceName(), testStorage.getClusterName(), 1)
+            .editMetadata()
+                .addToAnnotations(Annotations.STRIMZI_IO_USE_CONNECTOR_RESOURCES, "true")
+            .endMetadata()
+            .editSpec()
+                .withNewTopologyLabelRack()
+                    .withTopologyKey(TOPOLOGY_KEY)
+                .endTopologyLabelRack()
+            .endSpec()
+            .build());
+
+        LOGGER.info("Check that KafkaConnect Pod is unschedulable");
+        KafkaConnectUtils.waitForConnectPodCondition(testStorage.getNamespaceName(), "Unschedulable", invalidConnectClusterName, 30_000);
+
+        KafkaConnectUtils.waitForConnectReady(testStorage.getNamespaceName(), testStorage.getClusterName());
+
+        LOGGER.info("KafkaConnect cluster deployed successfully");
+        String deployName = KafkaConnectResources.componentName(testStorage.getClusterName());
+        String podName = PodUtils.getPodNameByPrefix(testStorage.getNamespaceName(), deployName);
+        Pod pod = KubeResourceManager.get().kubeClient().getClient().pods().inNamespace(testStorage.getNamespaceName()).withName(podName).get();
+
+        // check that spec matches the actual pod configuration
+        Affinity specAffinity = StUtils.getDeploymentOrStrimziPodSetAffinity(testStorage.getNamespaceName(), deployName);
+        NodeSelectorRequirement specNodeRequirement = specAffinity.getNodeAffinity().getRequiredDuringSchedulingIgnoredDuringExecution().getNodeSelectorTerms().get(0).getMatchExpressions().get(0);
+        NodeAffinity podAffinity = pod.getSpec().getAffinity().getNodeAffinity();
+        NodeSelectorRequirement podNodeRequirement = podAffinity.getRequiredDuringSchedulingIgnoredDuringExecution().getNodeSelectorTerms().get(0).getMatchExpressions().get(0);
+        assertThat(podNodeRequirement, is(specNodeRequirement));
+        assertThat(podNodeRequirement.getKey(), is(TOPOLOGY_KEY));
+        assertThat(podNodeRequirement.getOperator(), is("Exists"));
+
+        // check Kafka client rack awareness configuration
+        String commandOut = KubeResourceManager.get().kubeCmdClient().inNamespace(testStorage.getNamespaceName()).execInPod(podName,
+                "/bin/bash", "-c", "cat /tmp/strimzi-connect.properties | grep consumer.client.rack").out().trim();
+        assertThat(commandOut.contains("consumer.client.rack=${strimzidir:/opt/kafka/init:rack.id}"), is(true));
+
+        // produce data which are to be available in the topic
+        final KafkaProducerConsumer kafkaProducerConsumer = new KafkaProducerConsumerBuilder()
+            .withProducerName(testStorage.getProducerName())
+            .withConsumerName(testStorage.getConsumerName())
+            .withNamespaceName(testStorage.getNamespaceName())
+            .withTopicName(testStorage.getTopicName())
+            .withConsumerGroup(ClientUtils.generateRandomConsumerGroup())
+            .withBootstrapAddress(KafkaResources.plainBootstrapAddress(testStorage.getClusterName()))
+            .withMessageCount(testStorage.getMessageCount())
+            .build();
+
+        KubeResourceManager.get().createResourceWithWait(
+            kafkaProducerConsumer.getProducer().getJob(),
+            kafkaProducerConsumer.getConsumer().getJob()
+        );
+
+        ClientUtils.waitForClientsSuccess(testStorage.getNamespaceName(), testStorage.getConsumerName(), testStorage.getProducerName(), testStorage.getMessageCount());
+
+        consumeDataWithNewSinkConnector(testStorage.getNamespaceName(), testStorage.getClusterName(), testStorage.getClusterName(), testStorage.getTopicName(), testStorage.getMessageCount());
+    }
+
+    /**
+     * @description This test case verifies that Rack awareness configuration works as expected in KafkaMirrorMaker2 by configuring it and also using given CLuster.
+     *
+     * @steps
+     *  1. - Deploy target and source Kafka Clusters, both with 1 broker and 1 controller replica.
+     *     - Kafka Clusters and its components are deployed.
+     *  2. - Deploy KafkaMirrorMaker2 Cluster with rack configuration set to 'kubernetes.io/hostname'.
+     *     - KafkaMirrorMaker2 Cluster is deployed with according configuration in pod affinity, and consumer client rack on a given node.
+     *  3. - Produce messages in the source Kafka Cluster and Consuming from mirrored KafkaTopic in the target Kafka Cluster, thus making sure KafkaMirrorMaker2 works as expected.
+     *     - Data are produced and consumed from respective Kafka Clusters successfully.
+     *
+     * @usecase
+     *  - rack-awareness
+     *  - configuration
+     *  - mirror-maker-2
+     */
+    @Tag(MIRROR_MAKER2)
+    @ParallelNamespaceTest
+    void testMirrorMaker2RackAwareness() {
+        Assumptions.assumeFalse(Environment.isNamespaceRbacScope());
+
+        final TestStorage testStorage = new TestStorage(KubeResourceManager.get().getTestContext());
+
+        KubeResourceManager.get().createResourceWithWait(
+            KafkaNodePoolTemplates.brokerPoolPersistentStorage(testStorage.getNamespaceName(), testStorage.getSourceBrokerPoolName(), testStorage.getSourceClusterName(), 1).build(),
+            KafkaNodePoolTemplates.controllerPoolPersistentStorage(testStorage.getNamespaceName(), testStorage.getSourceControllerPoolName(), testStorage.getSourceClusterName(), 1).build()
+        );
+        KubeResourceManager.get().createResourceWithWait(KafkaTemplates.kafka(testStorage.getNamespaceName(), testStorage.getSourceClusterName(), 1).build());
+
+        KubeResourceManager.get().createResourceWithWait(
+            KafkaNodePoolTemplates.brokerPoolPersistentStorage(testStorage.getNamespaceName(), testStorage.getTargetBrokerPoolName(), testStorage.getTargetClusterName(), 1).build(),
+            KafkaNodePoolTemplates.controllerPoolPersistentStorage(testStorage.getNamespaceName(), testStorage.getTargetControllerPoolName(), testStorage.getTargetClusterName(), 1).build()
+        );
+        KubeResourceManager.get().createResourceWithWait(KafkaTemplates.kafka(testStorage.getNamespaceName(), testStorage.getTargetClusterName(), 1).build());
+
+        KubeResourceManager.get().createResourceWithWait(
+                KafkaMirrorMaker2Templates.kafkaMirrorMaker2(testStorage.getNamespaceName(), testStorage.getClusterName(), testStorage.getSourceClusterName(), testStorage.getTargetClusterName(), 1, false)
+                        .editSpec()
+                            .withNewTopologyLabelRack()
+                                .withTopologyKey(TOPOLOGY_KEY)
+                            .endTopologyLabelRack()
+                            .editFirstMirror()
+                                .editSourceConnector()
+                                    .addToConfig("refresh.topics.interval.seconds", "1")
+                                .endSourceConnector()
+                            .endMirror()
+                        .endSpec()
+                        .build());
+
+        LOGGER.info("MirrorMaker2: {}/{} cluster deployed successfully", testStorage.getNamespaceName(), testStorage.getClusterName());
+        String deployName = KafkaMirrorMaker2Resources.componentName(testStorage.getClusterName());
+        String podName = PodUtils.getPodNameByPrefix(testStorage.getNamespaceName(), deployName);
+        Pod pod = KubeResourceManager.get().kubeClient().getClient().pods().inNamespace(testStorage.getNamespaceName()).withName(podName).get();
+
+        // check that spec matches the actual pod configuration
+        Affinity specAffinity = StUtils.getDeploymentOrStrimziPodSetAffinity(testStorage.getNamespaceName(), deployName);
+        NodeSelectorRequirement specNodeRequirement = specAffinity.getNodeAffinity().getRequiredDuringSchedulingIgnoredDuringExecution().getNodeSelectorTerms().get(0).getMatchExpressions().get(0);
+        NodeAffinity podAffinity = pod.getSpec().getAffinity().getNodeAffinity();
+        NodeSelectorRequirement podNodeRequirement = podAffinity.getRequiredDuringSchedulingIgnoredDuringExecution().getNodeSelectorTerms().get(0).getMatchExpressions().get(0);
+        assertThat(podNodeRequirement, is(specNodeRequirement));
+        assertThat(podNodeRequirement.getKey(), is(TOPOLOGY_KEY));
+        assertThat(podNodeRequirement.getOperator(), is("Exists"));
+
+        // check Kafka client rack awareness configuration
+        String commandOut = KubeResourceManager.get().kubeCmdClient().inNamespace(testStorage.getNamespaceName()).execInPod(podName, "/bin/bash", "-c", "cat /tmp/strimzi-connect.properties | grep consumer.client.rack").out().trim();
+        assertThat(commandOut.contains("${strimzidir:/opt/kafka/init:rack.id}"), is(true));
+
+        // Mirroring messages by: Producing to the Source Kafka Cluster and consuming them from mirrored KafkaTopic in target Kafka Cluster.
+
+        KubeResourceManager.get().createResourceWithWait(KafkaTopicTemplates.topic(testStorage.getNamespaceName(), testStorage.getTopicName(), testStorage.getSourceClusterName(), 3).build());
+
+        LOGGER.info("Producing messages into the source Kafka: {}/{}, Topic: {}", testStorage.getNamespaceName(), testStorage.getSourceClusterName(), testStorage.getTopicName());
+        final KafkaProducerConsumer sourceKafkaProducerConsumer = new KafkaProducerConsumerBuilder()
+            .withProducerName(testStorage.getProducerName())
+            .withConsumerName(testStorage.getConsumerName())
+            .withNamespaceName(testStorage.getNamespaceName())
+            .withTopicName(testStorage.getTopicName())
+            .withConsumerGroup(ClientUtils.generateRandomConsumerGroup())
+            .withBootstrapAddress(KafkaResources.plainBootstrapAddress(testStorage.getSourceClusterName()))
+            .withMessageCount(testStorage.getMessageCount())
+            .build();
+
+        KubeResourceManager.get().createResourceWithWait(
+            sourceKafkaProducerConsumer.getProducer().getJob(),
+            sourceKafkaProducerConsumer.getConsumer().getJob()
+        );
+
+        ClientUtils.waitForClientsSuccess(testStorage.getNamespaceName(), testStorage.getConsumerName(), testStorage.getProducerName(), testStorage.getMessageCount());
+
+        LOGGER.info("Consuming messages in the target Kafka: {}/{} mirrored Topic: {}", testStorage.getNamespaceName(), testStorage.getTargetClusterName(), testStorage.getMirroredSourceTopicName());
+        final KafkaConsumerClient targetKafkaConsumer = new KafkaConsumerClientBuilder(sourceKafkaProducerConsumer.getConsumer())
+            .withBootstrapAddress(KafkaResources.plainBootstrapAddress(testStorage.getTargetClusterName()))
+            .withTopicName(testStorage.getMirroredSourceTopicName())
+            .withConsumerGroup(ClientUtils.generateRandomConsumerGroup())
+            .build();
+
+        KubeResourceManager.get().createResourceWithWait(targetKafkaConsumer.getJob());
+        ClientUtils.waitForClientSuccess(testStorage.getNamespaceName(), testStorage.getConsumerName(), testStorage.getMessageCount());
+    }
+
+    private void consumeDataWithNewSinkConnector(String namespaceName, String newConnectorName, String connectClusterName, String topicName, int msgCount) {
+
+        LOGGER.info("Deploying Sink KafkaConnector in KafkaConnect Cluster: {}/{}", namespaceName, newConnectorName);
+        Map<String, Object> connectorConfig = new HashMap<>();
+        connectorConfig.put("topics", topicName);
+        connectorConfig.put("file", TestConstants.DEFAULT_SINK_FILE_PATH);
+        connectorConfig.put("key.converter", "org.apache.kafka.connect.storage.StringConverter");
+        connectorConfig.put("value.converter", "org.apache.kafka.connect.storage.StringConverter");
+
+        KubeResourceManager.get().createResourceWithWait(KafkaConnectorTemplates.kafkaConnector(namespaceName, newConnectorName)
+            .editSpec()
+                .withClassName("org.apache.kafka.connect.file.FileStreamSinkConnector")
+                .withConfig(connectorConfig)
+            .endSpec()
+            .build());
+
+        String kafkaConnectPodName = KubeResourceManager.get().kubeClient().listPods(namespaceName,
+            LabelSelectors.connectLabelSelector(connectClusterName, KafkaConnectResources.componentName(connectClusterName))).get(0).getMetadata().getName();
+        LOGGER.info("KafkaConnect Pod: {}/{}", namespaceName, kafkaConnectPodName);
+        KafkaConnectUtils.waitUntilKafkaConnectRestApiIsAvailable(namespaceName, kafkaConnectPodName);
+
+        KafkaConnectUtils.waitForMessagesInKafkaConnectFileSink(namespaceName, kafkaConnectPodName, TestConstants.DEFAULT_SINK_FILE_PATH, msgCount);
+    }
+
+    /**
+     * @description     This test case verifies that environment variable-based Rack awareness configuration works as
+     *                  expected in Kafka Cluster.
+     *
+     * @steps
+     *  1. - Deploy Kafka Clusters with environment variable-based rack and also 'replica.selector.class' configured to rack-aware value.
+     *     - Kafka Cluster is deployed with according configuration in pod affinity, consumer client rack, and additional expected labels.
+     *  2. - Make sure Kafka works as expected by producing and consuming data.
+     *     - Data is successfully produced and consumed from Kafka Cluster.
+     *
+     * @usecase
+     *  - rack-awareness
+     *  - configuration
+     *  - kafka
+     *  - labels
+     */
+    @ParallelNamespaceTest
+    void testKafkaEnvironmentVariableRackAwareness() {
+        Assumptions.assumeFalse(Environment.isNamespaceRbacScope());
+
+        final TestStorage testStorage = new TestStorage(KubeResourceManager.get().getTestContext());
+
+        KubeResourceManager.get().createResourceWithWait(
+            KafkaNodePoolTemplates.brokerPoolPersistentStorage(testStorage.getNamespaceName(), testStorage.getBrokerPoolName(), testStorage.getClusterName(), 1)
+                    .editSpec()
+                        .editOrNewTemplate()
+                            .withNewKafkaContainer()
+                                .withEnv(new ContainerEnvVarBuilder().withName("MY_RACK_ID").withValue("rack-a").build())
+                            .endKafkaContainer()
+                        .endTemplate()
+                    .endSpec()
+                    .build(),
+            KafkaNodePoolTemplates.controllerPoolPersistentStorage(testStorage.getNamespaceName(), testStorage.getControllerPoolName(), testStorage.getClusterName(), 1)
+                    .editSpec()
+                        .editOrNewTemplate()
+                            .withNewKafkaContainer()
+                                .withEnv(new ContainerEnvVarBuilder().withName("MY_RACK_ID").withValue("rack-a").build())
+                            .endKafkaContainer()
+                        .endTemplate()
+                    .endSpec()
+                    .build()
+        );
+        KubeResourceManager.get().createResourceWithWait(KafkaTemplates.kafka(testStorage.getNamespaceName(), testStorage.getClusterName(), 1)
+                .editSpec()
+                    .editKafka()
+                        .withNewEnvironmentVariableRack()
+                            .withEnvVarName("MY_RACK_ID")
+                        .endEnvironmentVariableRack()
+                    .endKafka()
+                .endSpec()
+                .build());
+        LOGGER.info("Kafka cluster deployed successfully");
+
+        final KafkaAdminClient kafkaAdminClient = new KafkaAdminClientBuilder()
+            .withBootstrapAddress(KafkaResources.plainBootstrapAddress(testStorage.getClusterName()))
+            .withName(testStorage.getAdminName())
+            .withNamespaceName(testStorage.getNamespaceName())
+            .build();
+
+        KubeResourceManager.get().createResourceWithWait(kafkaAdminClient.getDeployment());
+
+        final AdminClient adminClient = AdminClientUtils.getConfiguredAdminClient(testStorage.getNamespaceName(), testStorage.getAdminName());
+
+        String nodeDescription = adminClient.describeNodes("all");
+        assertThat(AdminClientUtils.getRack(nodeDescription, "0").contains("rack-a"), is(true));
+
+        LOGGER.info("Producing and Consuming data in the Kafka cluster: {}/{}", testStorage.getNamespaceName(), testStorage.getClusterName());
+        final KafkaProducerConsumer kafkaProducerConsumer = new KafkaProducerConsumerBuilder()
+            .withProducerName(testStorage.getProducerName())
+            .withConsumerName(testStorage.getConsumerName())
+            .withNamespaceName(testStorage.getNamespaceName())
+            .withTopicName(testStorage.getTopicName())
+            .withConsumerGroup(ClientUtils.generateRandomConsumerGroup())
+            .withBootstrapAddress(KafkaResources.plainBootstrapAddress(testStorage.getClusterName()))
+            .withMessageCount(testStorage.getMessageCount())
+            .build();
+
+        KubeResourceManager.get().createResourceWithWait(
+            kafkaProducerConsumer.getProducer().getJob(),
+            kafkaProducerConsumer.getConsumer().getJob()
+        );
+
+        ClientUtils.waitForClientsSuccess(testStorage.getNamespaceName(), testStorage.getConsumerName(), testStorage.getProducerName(), testStorage.getMessageCount());
+    }
+
+    @BeforeAll
+    void setup() {
+        SetupClusterOperator
+            .getInstance()
+            .withDefaultConfiguration()
+            .install();
+    }
+}

@@ -1,0 +1,94 @@
+:_mod-docs-content-type: CONCEPT
+
+Configures the User Operator.
+
+[id='property-user-operator-logging-{context}']
+= Logging
+
+The User Operator has its own preconfigured loggers:
+
+[cols="1m,2,1",options="header"]
+|===
+| Logger     | Description                    | Default Level
+
+| rootLogger | Default logger for all classes | INFO
+| jetty      | Logs HTTP server activity      | INFO
+|===
+
+The User Operator uses the Apache `log4j2` logger implementation.
+Use the `logging` property to configure loggers and logger levels.
+
+You can set log levels using either the `inline` or `external` logging configuration types.
+
+Specify loggers and levels directly in the custom resource for inline configuration:
+
+.Example inline logging configuration
+[source,yaml,subs="+quotes,attributes"]
+----
+apiVersion: {KafkaApiVersion}
+kind: Kafka
+metadata:
+  name: my-cluster
+spec:
+  kafka:
+    # ...
+  entityOperator:
+    # ...
+    userOperator:
+      watchedNamespace: my-topic-namespace
+      reconciliationIntervalMs: 60000
+      logging:
+        type: inline
+        loggers:
+          rootLogger.level: INFO
+          logger.jetty.level: WARN  
+  # ...
+----
+
+You can define additional loggers by specifying the full class or package name using `logger.<name>.name`. 
+For example, to configure more detailed logging for the User Operator inline:
+
+.Example custom inline loggers
+[source,yaml]
+----
+# ...
+logger.uop.name: io.strimzi.operator.user # <1>
+logger.uop.level: DEBUG # <2> 
+logger.abstractcache.name: io.strimzi.operator.user.operator.cache.AbstractCache # <3>
+logger.abstractcache.level: TRACE # <4>     
+----
+<1> Creates a logger for the `user` package.
+<2> Sets the logging level for the `user` package.
+<3> Creates a logger for the `AbstractCache` class.
+<4> Sets the logging level for the `AbstractCache` class. 
+
+Alternatively, you can reference an external `ConfigMap` containing a complete `log4j2.properties` file that defines your own log4j2 configuration, including loggers, appenders, and layout configuration:
+
+.Example external logging configuration
+[source,yaml,subs="+quotes,attributes"]
+----
+apiVersion: {KafkaApiVersion}
+kind: Kafka
+metadata:
+  name: my-cluster
+spec:
+  kafka:
+    # ...
+  entityOperator:
+    # ...
+    userOperator:
+      watchedNamespace: my-topic-namespace
+      reconciliationIntervalMs: 60000
+      logging:
+        type: external
+        valueFrom:
+          configMapKeyRef:
+            # name and key are mandatory
+            name: customConfigMap
+            key: log4j2.properties
+   # ...
+----
+
+.Garbage collector (GC)
+
+Garbage collector logging can also be enabled (or disabled) using the xref:con-common-configuration-garbage-collection-reference[`jvmOptions` property].

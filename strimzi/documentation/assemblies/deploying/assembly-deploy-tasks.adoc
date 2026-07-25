@@ -1,0 +1,50 @@
+:_mod-docs-content-type: ASSEMBLY
+
+// This assembly is included in:
+//
+// deploying/deploying.adoc
+
+[id="deploy-tasks_{context}"]
+= Deploying Strimzi using installation files
+
+[role="_abstract"]
+Download and use the Strimzi xref:downloads-{context}[deployment files] to deploy Strimzi components to a Kubernetes cluster.
+
+ifdef::Section[]
+You can deploy Strimzi {ProductVersion} on Kubernetes {KubernetesVersion}.
+endif::Section[]
+
+ifndef::Section[]
+Strimzi is based on {StrimziVersion}.
+You can deploy Strimzi {ProductVersion} on OpenShift {OpenShiftVersion}.
+endif::Section[]
+
+The steps to deploy Strimzi using the installation files are as follows:
+
+. xref:cluster-operator-{context}[Deploy the Cluster Operator]
+. Use the Cluster Operator to deploy the following:
+.. xref:kafka-cluster-{context}[Kafka cluster]
+.. xref:deploying-the-topic-operator-using-the-cluster-operator-{context}[Topic Operator]
+.. xref:deploying-the-user-operator-using-the-cluster-operator-{context}[User Operator]
+. Optionally, deploy the following Kafka components according to your requirements:
+* xref:kafka-connect-{context}[Kafka Connect]
+* xref:kafka-mirror-maker-{context}[Kafka MirrorMaker]
+* xref:http-bridge-{context}[HTTP Bridge]
+
+NOTE: To run the commands in this guide, a Kubernetes user must have the rights to manage role-based access control (RBAC) and CRDs.
+
+//Options and instructions for deploying Cluster Operator
+include::assembly-deploy-cluster-operator.adoc[leveloffset=+1]
+//Options and instructions for deploying Kafka resource
+include::assembly-deploy-kafka-cluster.adoc[leveloffset=+1]
+//Procedure to deploy Kafka Connect
+include::assembly-deploy-kafka-connect.adoc[leveloffset=+1]
+//Adding Kafka Connect connectors
+include::assembly-deploy-kafka-connect-with-plugins.adoc[leveloffset=+1]
+//Procedure to deploy Kafka MirrorMaker
+include::assembly-deploy-kafka-mirror-maker.adoc[leveloffset=+1]
+//Procedure to deploy HTTP Bridge
+include::assembly-deploy-http-bridge.adoc[leveloffset=+1]
+//Alternative standalone deployment of Topic Operator and Cluster Operator
+include::assembly-deploy-standalone-operators.adoc[leveloffset=+1]
+

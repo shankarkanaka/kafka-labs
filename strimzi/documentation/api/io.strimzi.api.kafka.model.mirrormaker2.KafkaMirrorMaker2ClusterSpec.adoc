@@ -1,0 +1,8 @@
+:_mod-docs-content-type: CONCEPT
+
+Configures Kafka clusters for mirroring.
+
+Use the `config` properties to configure Kafka options, restricted to those properties not managed directly by Strimzi.
+
+For client connection using a specific _cipher suite_ for a TLS version, you can xref:con-common-configuration-ssl-reference[configure allowed `ssl` properties].
+You can also xref:con-common-configuration-ssl-reference[configure the `ssl.endpoint.identification.algorithm` property] to enable or disable hostname verification.

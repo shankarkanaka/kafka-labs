@@ -1,0 +1,16 @@
+:_mod-docs-content-type: CONCEPT
+
+Configure clients to use quotas so that a user does not overload Kafka brokers.
+
+.Example Kafka user quota configuration
+[source,yaml,subs=attributes+]
+----
+spec:
+  quotas:
+    producerByteRate: 1048576
+    consumerByteRate: 2097152
+    requestPercentage: 55
+    controllerMutationRate: 10
+----
+
+For more information, see the link:{ApacheKafkaDocsBase}design/design/[Apache Kafka design documentation^].

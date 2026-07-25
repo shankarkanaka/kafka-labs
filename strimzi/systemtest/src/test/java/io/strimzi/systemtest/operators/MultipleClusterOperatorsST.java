@@ -1,0 +1,393 @@
+/*
+ * Copyright Strimzi authors.
+ * License: Apache License 2.0 (see the file LICENSE or http://apache.org/licenses/LICENSE-2.0.html).
+ */
+package io.strimzi.systemtest.operators;
+
+import io.fabric8.kubernetes.api.model.EnvVar;
+import io.fabric8.kubernetes.api.model.rbac.ClusterRoleBinding;
+import io.skodjob.annotations.Desc;
+import io.skodjob.annotations.Label;
+import io.skodjob.annotations.Step;
+import io.skodjob.annotations.SuiteDoc;
+import io.skodjob.annotations.TestDoc;
+import io.skodjob.kubetest4j.resources.KubeResourceManager;
+import io.strimzi.api.kafka.model.connect.KafkaConnect;
+import io.strimzi.api.kafka.model.connector.KafkaConnector;
+import io.strimzi.api.kafka.model.kafka.Kafka;
+import io.strimzi.api.kafka.model.kafka.KafkaResources;
+import io.strimzi.api.kafka.model.kafka.cruisecontrol.CruiseControlResources;
+import io.strimzi.api.kafka.model.rebalance.KafkaRebalance;
+import io.strimzi.api.kafka.model.rebalance.KafkaRebalanceAnnotation;
+import io.strimzi.api.kafka.model.rebalance.KafkaRebalanceState;
+import io.strimzi.operator.common.Annotations;
+import io.strimzi.systemtest.AbstractST;
+import io.strimzi.systemtest.Environment;
+import io.strimzi.systemtest.TestConstants;
+import io.strimzi.systemtest.annotations.IsolatedTest;
+import io.strimzi.systemtest.docs.TestDocsLabels;
+import io.strimzi.systemtest.performance.gather.collectors.BaseMetricsCollector;
+import io.strimzi.systemtest.resources.CrdClients;
+import io.strimzi.systemtest.resources.operator.ClusterOperatorConfigurationBuilder;
+import io.strimzi.systemtest.resources.operator.SetupClusterOperator;
+import io.strimzi.systemtest.storage.TestStorage;
+import io.strimzi.systemtest.templates.crd.KafkaConnectTemplates;
+import io.strimzi.systemtest.templates.crd.KafkaConnectorTemplates;
+import io.strimzi.systemtest.templates.crd.KafkaNodePoolTemplates;
+import io.strimzi.systemtest.templates.crd.KafkaRebalanceTemplates;
+import io.strimzi.systemtest.templates.crd.KafkaTemplates;
+import io.strimzi.systemtest.templates.crd.KafkaTopicTemplates;
+import io.strimzi.systemtest.templates.kubernetes.ClusterRoleBindingTemplates;
+import io.strimzi.systemtest.templates.specific.ScraperTemplates;
+import io.strimzi.systemtest.utils.ClientUtils;
+import io.strimzi.systemtest.utils.RollingUpdateUtils;
+import io.strimzi.systemtest.utils.kafkaUtils.KafkaConnectUtils;
+import io.strimzi.systemtest.utils.kafkaUtils.KafkaNodePoolUtils;
+import io.strimzi.systemtest.utils.kafkaUtils.KafkaRebalanceUtils;
+import io.strimzi.systemtest.utils.kafkaUtils.KafkaUtils;
+import io.strimzi.systemtest.utils.kubeUtils.NamespaceUtils;
+import io.strimzi.systemtest.utils.kubeUtils.controllers.DeploymentUtils;
+import io.strimzi.systemtest.utils.kubeUtils.objects.NetworkPolicyUtils;
+import io.strimzi.systemtest.utils.kubeUtils.objects.PodUtils;
+import io.strimzi.systemtest.utils.specific.MetricsUtils;
+import io.strimzi.testclients.clients.kafka.KafkaProducerClient;
+import io.strimzi.testclients.clients.kafka.KafkaProducerClientBuilder;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+import static io.strimzi.systemtest.TestTags.CONNECT;
+import static io.strimzi.systemtest.TestTags.CONNECT_COMPONENTS;
+import static io.strimzi.systemtest.TestTags.CRUISE_CONTROL;
+import static io.strimzi.systemtest.TestTags.REGRESSION;
+import static io.strimzi.systemtest.utils.specific.MetricsUtils.setupCOMetricsCollectorInNamespace;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+@Tag(REGRESSION)
+@SuiteDoc(
+    description = @Desc("Test suite for verifying multiple Cluster Operator deployment scenarios, including resource selectors, leader election, and metrics collection across different namespace configurations."),
+    beforeTestSteps = {
+        @Step(value = "Skip this test suite if using Helm or OLM installation.", expected = "The test suite only runs with YAML-based installations.")
+    },
+    labels = {
+        @Label(value = TestDocsLabels.KAFKA)
+    }
+)
+public class MultipleClusterOperatorsST extends AbstractST {
+
+    private static final Logger LOGGER = LogManager.getLogger(MultipleClusterOperatorsST.class);
+
+    public static final String DEFAULT_NAMESPACE = "multiple-co-cluster-test";
+    public static final String FIRST_NAMESPACE = "first-co-namespace";
+    public static final String SECOND_NAMESPACE = "second-co-namespace";
+
+    public static final String FIRST_CO_NAME = "first-" + TestConstants.STRIMZI_DEPLOYMENT_NAME;
+    public static final String SECOND_CO_NAME = "second-" + TestConstants.STRIMZI_DEPLOYMENT_NAME;
+
+    public static final EnvVar FIRST_CO_SELECTOR_ENV = new EnvVar("STRIMZI_CUSTOM_RESOURCE_SELECTOR", "app.kubernetes.io/operator=" + FIRST_CO_NAME, null);
+    public static final EnvVar SECOND_CO_SELECTOR_ENV = new EnvVar("STRIMZI_CUSTOM_RESOURCE_SELECTOR", "app.kubernetes.io/operator=" + SECOND_CO_NAME, null);
+
+    public static final EnvVar FIRST_CO_LEASE_NAME_ENV = new EnvVar("STRIMZI_LEADER_ELECTION_LEASE_NAME", FIRST_CO_NAME, null);
+    public static final EnvVar SECOND_CO_LEASE_NAME_ENV = new EnvVar("STRIMZI_LEADER_ELECTION_LEASE_NAME", SECOND_CO_NAME, null);
+
+    public static final Map<String, String> FIRST_CO_SELECTOR = Collections.singletonMap("app.kubernetes.io/operator", FIRST_CO_NAME);
+    public static final Map<String, String> SECOND_CO_SELECTOR = Collections.singletonMap("app.kubernetes.io/operator", SECOND_CO_NAME);
+
+    @IsolatedTest
+    @Tag(CONNECT)
+    @Tag(CONNECT_COMPONENTS)
+    @TestDoc(
+        description = @Desc("This test verifies how two Cluster Operators operate resources deployed in namespaces watched by both operators, and how operands can be transitioned from one Cluster Operator to another using label selectors."),
+        steps = {
+            @Step(value = "Deploy two Cluster Operators in separate namespaces, both watching all namespaces.", expected = "Both Cluster Operators are successfully deployed."),
+            @Step(value = "Set up scrapers and metric collectors for both Cluster Operators.", expected = "Scraper Pods and metrics collectors are configured and ready."),
+            @Step(value = "Create namespace for test resources.", expected = "Namespace `multiple-co-cluster-test` is created and set as default."),
+            @Step(value = "Deploy Kafka without operator selector label.", expected = "The `Kafka` resource is created but no pods are deployed because it is not managed by any operator."),
+            @Step(value = "Verify Kafka metrics are absent in both operators.", expected = "Metric `strimzi_resource` for Kafka is null or zero in both Cluster Operators."),
+            @Step(value = "Add label selector pointing to first Cluster Operator.", expected = "Kafka is deployed and managed by the first Cluster Operator."),
+            @Step(value = "Deploy `KafkaConnect` and `KafkaConnector` with a label selecting the first Cluster Operator.", expected = "Both resources are successfully deployed and managed by the first Cluster Operator."),
+            @Step(value = "Produce and consume messages using Sink Connector.", expected = "Messages are produced to topic and consumed by the Connector successfully."),
+            @Step(value = "Switch Kafka management to the second Cluster Operator by changing the label.", expected = "Kafka management transfers to second operator, as confirmed by updated metrics."),
+            @Step(value = "Verify metrics for all operands on both operators.", expected = "Metric `strimzi_resource` shows correct counts for each Cluster Operator.")
+        },
+        labels = {
+            @Label(value = TestDocsLabels.KAFKA),
+            @Label(value = TestDocsLabels.CONNECT),
+            @Label(value = TestDocsLabels.METRICS)
+        }
+    )
+    void testMultipleCOsInDifferentNamespaces() {
+        // Strimzi is deployed with cluster-wide access in this class STRIMZI_RBAC_SCOPE=NAMESPACE won't work
+        assumeFalse(Environment.isNamespaceRbacScope());
+
+        final TestStorage testStorage = new TestStorage(KubeResourceManager.get().getTestContext(), DEFAULT_NAMESPACE);
+
+        String firstCOScraperName = FIRST_NAMESPACE + "-" + TestConstants.SCRAPER_NAME;
+        String secondCOScraperName = SECOND_NAMESPACE + "-" + TestConstants.SCRAPER_NAME;
+
+        LOGGER.info("Deploying Cluster Operators: {}, {} in respective namespaces: {}, {}", FIRST_CO_NAME, SECOND_CO_NAME, FIRST_NAMESPACE, SECOND_NAMESPACE);
+        deployCOInNamespace(FIRST_NAMESPACE, FIRST_CO_NAME, Collections.singletonList(FIRST_CO_SELECTOR_ENV), true);
+        deployCOInNamespace(SECOND_NAMESPACE, SECOND_CO_NAME, Collections.singletonList(SECOND_CO_SELECTOR_ENV), true);
+
+        LOGGER.info("Deploying scraper Pods: {}, {} for later metrics retrieval", firstCOScraperName, secondCOScraperName);
+        KubeResourceManager.get().createResourceWithWait(
+            ScraperTemplates.scraperPod(FIRST_NAMESPACE, firstCOScraperName).build(),
+            ScraperTemplates.scraperPod(SECOND_NAMESPACE, secondCOScraperName).build()
+        );
+
+        LOGGER.info("Setting up metric collectors targeting Cluster Operators: {}, {}", FIRST_CO_NAME, SECOND_CO_NAME);
+        String firstCOScraper = FIRST_NAMESPACE + "-" + TestConstants.SCRAPER_NAME;
+        BaseMetricsCollector firstCoMetricsCollector = setupCOMetricsCollectorInNamespace(FIRST_NAMESPACE, FIRST_CO_NAME, firstCOScraper);
+        String secondCOScraper = SECOND_NAMESPACE + "-" + TestConstants.SCRAPER_NAME;
+        BaseMetricsCollector secondCoMetricsCollector = setupCOMetricsCollectorInNamespace(SECOND_NAMESPACE, SECOND_CO_NAME, secondCOScraper);
+
+        // allowing NetworkPolicies for all scraper Pods to all CO Pods
+        NetworkPolicyUtils.allowNetworkPolicySettingsForClusterOperator(FIRST_NAMESPACE);
+        NetworkPolicyUtils.allowNetworkPolicySettingsForClusterOperator(SECOND_NAMESPACE);
+
+        LOGGER.info("Deploying Namespace: {} to host all additional operands", testStorage.getNamespaceName());
+        NamespaceUtils.createNamespaceAndPrepare(testStorage.getNamespaceName());
+
+        LOGGER.info("Set cluster namespace to {}, as all operands will be from now on deployd here", testStorage.getNamespaceName());
+        cluster.setNamespace(testStorage.getNamespaceName());
+
+        LOGGER.info("Deploying Kafka: {}/{} without CR selector", testStorage.getNamespaceName(), testStorage.getClusterName());
+        KubeResourceManager.get().createResourceWithWait(
+            KafkaNodePoolTemplates.brokerPool(testStorage.getNamespaceName(), testStorage.getBrokerPoolName(), testStorage.getClusterName(), 3).build(),
+            KafkaNodePoolTemplates.controllerPool(testStorage.getNamespaceName(), testStorage.getControllerPoolName(), testStorage.getClusterName(), 3).build()
+        );
+        KubeResourceManager.get().createResourceWithoutWait(KafkaTemplates.kafka(testStorage.getNamespaceName(), testStorage.getClusterName(), 3).build());
+
+        // checking that no pods with prefix 'clusterName' will be created in some time
+        PodUtils.waitUntilPodStabilityReplicasCount(testStorage.getNamespaceName(), testStorage.getClusterName(), 0);
+
+        // verify that metric signalizing managing of kafka is not present in either of cluster operators
+        MetricsUtils.assertCoMetricResourcesNullOrZero(testStorage.getNamespaceName(), Kafka.RESOURCE_KIND, firstCoMetricsCollector);
+        MetricsUtils.assertCoMetricResourcesNullOrZero(testStorage.getNamespaceName(), Kafka.RESOURCE_KIND, secondCoMetricsCollector);
+
+        LOGGER.info("Adding {} selector of {} into Kafka: {} CR", FIRST_CO_SELECTOR, FIRST_CO_NAME, testStorage.getClusterName());
+        KafkaUtils.replace(testStorage.getNamespaceName(), testStorage.getClusterName(), kafka -> kafka.getMetadata().setLabels(FIRST_CO_SELECTOR));
+        KafkaUtils.waitForKafkaReady(testStorage.getNamespaceName(), testStorage.getClusterName());
+
+        KubeResourceManager.get().createResourceWithWait(
+            KafkaTopicTemplates.topic(testStorage).build(),
+            KafkaConnectTemplates.kafkaConnectWithFilePlugin(testStorage.getNamespaceName(), testStorage.getClusterName(), 1)
+                .editOrNewMetadata()
+                    .addToLabels(FIRST_CO_SELECTOR)
+                    .addToAnnotations(Annotations.STRIMZI_IO_USE_CONNECTOR_RESOURCES, "true")
+                .endMetadata()
+                .build());
+
+        String kafkaConnectPodName = KubeResourceManager.get().kubeClient().listPods(testStorage.getNamespaceName(), testStorage.getKafkaConnectSelector()).get(0).getMetadata().getName();
+
+        LOGGER.info("Deploying KafkaConnector with file sink and CR selector - {} - different than selector in Kafka", SECOND_CO_SELECTOR);
+        KubeResourceManager.get().createResourceWithWait(KafkaConnectorTemplates.kafkaConnector(testStorage.getNamespaceName(), testStorage.getClusterName())
+            .editSpec()
+                .withClassName("org.apache.kafka.connect.file.FileStreamSinkConnector")
+                .addToConfig("file", TestConstants.DEFAULT_SINK_FILE_PATH)
+                .addToConfig("key.converter", "org.apache.kafka.connect.storage.StringConverter")
+                .addToConfig("value.converter", "org.apache.kafka.connect.storage.StringConverter")
+                .addToConfig("topics", testStorage.getTopicName())
+            .endSpec()
+            .build());
+
+        final KafkaProducerClient kafkaProducerClient = new KafkaProducerClientBuilder()
+            .withName(testStorage.getProducerName())
+            .withNamespaceName(testStorage.getNamespaceName())
+            .withTopicName(testStorage.getTopicName())
+            .withBootstrapAddress(KafkaResources.plainBootstrapAddress(testStorage.getClusterName()))
+            .withMessageCount(testStorage.getMessageCount())
+            .build();
+
+        KubeResourceManager.get().createResourceWithWait(kafkaProducerClient.getJob());
+
+        ClientUtils.waitForClientSuccess(testStorage.getNamespaceName(), testStorage.getProducerName(), testStorage.getMessageCount());
+
+        KafkaConnectUtils.waitForMessagesInKafkaConnectFileSink(testStorage.getNamespaceName(), kafkaConnectPodName, TestConstants.DEFAULT_SINK_FILE_PATH, testStorage.getMessageCount());
+
+        LOGGER.info("Verifying that all operands in Namespace: {} are managed by Cluster Operator: {}", testStorage.getNamespaceName(), FIRST_CO_NAME);
+        MetricsUtils.assertMetricResourcesHigherThanOrEqualTo(firstCoMetricsCollector, Kafka.RESOURCE_KIND, 1);
+        MetricsUtils.assertMetricResourcesHigherThanOrEqualTo(firstCoMetricsCollector, KafkaConnect.RESOURCE_KIND, 1);
+        MetricsUtils.assertMetricResourcesHigherThanOrEqualTo(firstCoMetricsCollector, KafkaConnector.RESOURCE_KIND, 1);
+
+        LOGGER.info("Switch management of Kafka Cluster: {}/{} operand from CO: {} to CO: {}", testStorage.getNamespaceName(), testStorage.getClusterName(), FIRST_CO_NAME, SECOND_CO_NAME);
+        KafkaUtils.replace(testStorage.getNamespaceName(), testStorage.getClusterName(), kafka -> {
+            kafka.getMetadata().getLabels().replace("app.kubernetes.io/operator", SECOND_CO_NAME);
+        });
+
+        LOGGER.info("Verifying that number of managed Kafka resources in increased in CO: {} and decreased om CO: {}", SECOND_CO_NAME, FIRST_CO_NAME);
+        MetricsUtils.assertMetricResourcesHigherThanOrEqualTo(secondCoMetricsCollector, Kafka.RESOURCE_KIND, 1);
+        MetricsUtils.assertMetricResourcesLowerThanOrEqualTo(firstCoMetricsCollector, Kafka.RESOURCE_KIND, 0);
+    }
+
+    /**
+     * @description This test case checks how two Cluster Operators deployed in the same namespace operates operands including KafkaRebalance and transition
+     * of operand from one Cluster Operator to another.
+     *
+     * @steps
+     *  1. - Deploy 2 Cluster Operators in the same namespace, with additional env variable 'STRIMZI_LEADER_ELECTION_LEASE_NAME'.
+     *     - Cluster Operators are successfully deployed.
+     *  2. - Set up scrapers and metric collectors for first Cluster Operators.
+     *  3. - Deploy Kafka Cluster with 3 Kafka replicas and label 'app.kubernetes.io/operator' pointing to the first Cluster Operator.
+     *  4. - Change Kafka's label selector 'app.kubernetes.io/operator' to point to not existing Cluster Operator.
+     *     - Kafka Cluster is no longer controlled by any Cluster Operator.
+     *  5. - Modify Kafka CustomResource, by increasing number of replicas from 3 to 4.
+     *     - Kafka is not scaled to 4 replicas.
+     *  6. - Deploy Kafka Rebalance without 'app.kubernetes.io/operator' label.
+     *     - For a stable period of time, Kafka Rebalance is ignored as well.
+     *  7. - Change Kafka's label selector 'app.kubernetes.io/operator' to point to the second Cluster Operator.
+     *     - Second Cluster Operator now operates Kafka Cluster and increases its replica count to 4.
+     *  8. - Cruise Control Pod is rolled as there is increase in Kafka replica count.
+     *     - Rebalance finally takes place.
+     *  9. - Verify that Operators operate expected operands.
+     *     - Operators operate expected operands.
+     *
+     * @usecase
+     *  - cluster-operator-metrics
+     *  - cluster-operator-watcher
+     *  - kafka
+     *  - labels
+     *  - metrics
+     *  - rebalance
+     */
+    @IsolatedTest
+    @Tag(CRUISE_CONTROL)
+    void testKafkaCCAndRebalanceWithMultipleCOs() {
+        assumeFalse(Environment.isNamespaceRbacScope());
+        final TestStorage testStorage = new TestStorage(KubeResourceManager.get().getTestContext(), DEFAULT_NAMESPACE);
+
+        int scaleTo = 4;
+
+        LOGGER.info("Deploying 2 Cluster Operators: {}, {} in the same namespace: {}", FIRST_CO_NAME, SECOND_CO_NAME, testStorage.getNamespaceName());
+        deployCOInNamespace(testStorage.getNamespaceName(), FIRST_CO_NAME, List.of(FIRST_CO_SELECTOR_ENV, FIRST_CO_LEASE_NAME_ENV), false);
+        deployCOInNamespace(testStorage.getNamespaceName(), SECOND_CO_NAME, List.of(SECOND_CO_SELECTOR_ENV, SECOND_CO_LEASE_NAME_ENV), false, false);
+
+        String secondCOScraperName = testStorage.getNamespaceName() + "-" + TestConstants.SCRAPER_NAME;
+
+        LOGGER.info("Deploying scraper Pod: {}, for later metrics retrieval", secondCOScraperName);
+        KubeResourceManager.get().createResourceWithWait(ScraperTemplates.scraperPod(testStorage.getNamespaceName(), secondCOScraperName).build());
+
+        LOGGER.info("Setting up metric collectors targeting Cluster Operator: {}", SECOND_CO_NAME);
+        String coScraperName = testStorage.getNamespaceName() + "-" + TestConstants.SCRAPER_NAME;
+        BaseMetricsCollector secondCoMetricsCollector = setupCOMetricsCollectorInNamespace(testStorage.getNamespaceName(), SECOND_CO_NAME, coScraperName);
+        // allowing NetworkPolicies for all scraper Pods to all CO Pods
+        NetworkPolicyUtils.allowNetworkPolicySettingsForClusterOperator(testStorage.getNamespaceName());
+
+        LOGGER.info("Deploying Kafka with cruise control and with {} selector of {}", FIRST_CO_NAME, FIRST_CO_SELECTOR);
+        KubeResourceManager.get().createResourceWithWait(
+            KafkaNodePoolTemplates.brokerPool(testStorage.getNamespaceName(), testStorage.getBrokerPoolName(), testStorage.getClusterName(), 3).build(),
+            KafkaNodePoolTemplates.controllerPool(testStorage.getNamespaceName(), testStorage.getControllerPoolName(), testStorage.getClusterName(), 3).build()
+        );
+        KubeResourceManager.get().createResourceWithWait(KafkaTemplates.kafkaWithCruiseControlTunedForFastModelGeneration(testStorage.getNamespaceName(), testStorage.getClusterName(), 3)
+            .editOrNewMetadata()
+                .addToLabels(FIRST_CO_SELECTOR)
+            .endMetadata()
+            .build());
+
+        final Map<String, String> kafkaCCSnapshot = DeploymentUtils.depSnapshot(testStorage.getNamespaceName(), CruiseControlResources.componentName(testStorage.getClusterName()));
+
+        LOGGER.info("Removing CR selector from Kafka and increasing number of replicas to 4, new Pod should not appear");
+        KafkaNodePoolUtils.replace(testStorage.getNamespaceName(), testStorage.getBrokerPoolName(), knp -> {
+            Map<String, String> labels = knp.getMetadata().getLabels();
+            labels.put("app.kubernetes.io/operator", "random-operator-value");
+
+            knp.getMetadata().setLabels(labels);
+            knp.getSpec().setReplicas(scaleTo);
+        });
+
+        KafkaUtils.replace(testStorage.getNamespaceName(), testStorage.getClusterName(), kafka -> {
+            kafka.getMetadata().getLabels().clear();
+        });
+
+        // because KafkaRebalance is pointing to Kafka with CC cluster, we need to create KR before adding the label back
+        // to test if KR will be ignored
+        LOGGER.info("Creating KafkaRebalance when CC doesn't have label for CO, the KR should be ignored");
+        KubeResourceManager.get().createResourceWithoutWait(KafkaRebalanceTemplates.kafkaRebalance(testStorage.getNamespaceName(), testStorage.getClusterName())
+            .editSpec()
+                .withGoals("DiskCapacityGoal", "CpuCapacityGoal",
+                    "NetworkInboundCapacityGoal", "MinTopicLeadersPerBrokerGoal",
+                    "NetworkOutboundCapacityGoal", "ReplicaCapacityGoal")
+                .withSkipHardGoalCheck(true)
+                // skip sanity check: because of removal 'RackAwareGoal'
+            .endSpec()
+            .build());
+
+        KafkaUtils.waitForClusterStability(testStorage.getNamespaceName(), testStorage.getClusterName());
+
+        LOGGER.info("Checking if KafkaRebalance is still ignored, after the cluster stability wait");
+
+        // because KR is ignored, it shouldn't contain any status
+        assertNull(CrdClients.kafkaRebalanceClient().inNamespace(testStorage.getNamespaceName()).withName(testStorage.getClusterName()).get().getStatus());
+
+        LOGGER.info("Adding {} selector of {} to Kafka", SECOND_CO_SELECTOR, SECOND_CO_NAME);
+        KafkaNodePoolUtils.replace(testStorage.getNamespaceName(), testStorage.getBrokerPoolName(),
+            knp -> knp.getMetadata().getLabels().putAll(SECOND_CO_SELECTOR));
+
+        KafkaUtils.replace(testStorage.getNamespaceName(), testStorage.getClusterName(), kafka -> kafka.getMetadata().setLabels(SECOND_CO_SELECTOR));
+
+        LOGGER.info("Waiting for Kafka to scales Pods to {}", scaleTo);
+        RollingUpdateUtils.waitForComponentAndPodsReady(testStorage.getNamespaceName(), testStorage.getBrokerSelector(), scaleTo);
+        assertThat(PodUtils.podSnapshot(testStorage.getNamespaceName(), testStorage.getBrokerSelector()).size(), is(scaleTo));
+
+        LOGGER.info("Waiting for CC Pod to roll, because there is change in kafka replication factor");
+        DeploymentUtils.waitTillDepHasRolled(testStorage.getNamespaceName(), CruiseControlResources.componentName(testStorage.getClusterName()), 1, kafkaCCSnapshot);
+
+        KafkaUtils.waitForClusterStability(testStorage.getNamespaceName(), testStorage.getClusterName());
+
+        // Refresh the KafkaRebalance to make sure it's not in `NotReady` state due to CruiseControlRestException
+        // This can happen if the new Cruise Control pod was not up and request was propagated to old Cruise Control
+        if (KafkaRebalanceUtils.rebalanceStateCondition(testStorage.getNamespaceName(), testStorage.getClusterName()).getType().equals(KafkaRebalanceState.NotReady.name())) {
+            KafkaRebalanceUtils.annotateKafkaRebalanceResource(testStorage.getNamespaceName(), testStorage.getClusterName(), KafkaRebalanceAnnotation.refresh);
+        }
+
+        KafkaRebalanceUtils.doRebalancingProcess(testStorage.getNamespaceName(), testStorage.getClusterName());
+
+        LOGGER.info("Verifying that operands are operated by expected Cluster Operator {}", FIRST_CO_NAME);
+        MetricsUtils.assertMetricResourcesHigherThanOrEqualTo(secondCoMetricsCollector, KafkaRebalance.RESOURCE_KIND, 1);
+        MetricsUtils.assertMetricResourcesHigherThanOrEqualTo(secondCoMetricsCollector, Kafka.RESOURCE_KIND, 1);
+    }
+
+    void deployCOInNamespace(String clusterOperatorNamespaceName, String coName, List<EnvVar> extraEnvs, boolean multipleNamespaces) {
+        deployCOInNamespace(clusterOperatorNamespaceName, coName, extraEnvs, multipleNamespaces, true);
+    }
+
+    void deployCOInNamespace(String clusterOperatorNamespaceName, String coName, List<EnvVar> extraEnvs, boolean multipleNamespaces, boolean deleteNamespace) {
+        String namespace = multipleNamespaces ? TestConstants.WATCH_ALL_NAMESPACES : clusterOperatorNamespaceName;
+
+        if (multipleNamespaces) {
+            // Create ClusterRoleBindings that grant cluster-wide access to all OpenShift projects
+            List<ClusterRoleBinding> clusterRoleBindingList = ClusterRoleBindingTemplates.clusterRoleBindingsForAllNamespaces(clusterOperatorNamespaceName, coName);
+            clusterRoleBindingList.forEach(
+                clusterRoleBinding -> KubeResourceManager.get().createResourceWithWait(clusterRoleBinding));
+        }
+
+        LOGGER.info("Creating: {} in Namespace: {}", coName, clusterOperatorNamespaceName);
+
+        SetupClusterOperator
+            .getInstance()
+            .withCustomConfiguration(new ClusterOperatorConfigurationBuilder()
+                .withNamespaceName(clusterOperatorNamespaceName)
+                .withOperatorDeploymentName(coName)
+                .withNamespacesToWatch(namespace)
+                .withExtraLabels(Collections.singletonMap("app.kubernetes.io/operator", coName))
+                .withExtraEnvVars(extraEnvs)
+                .withDeleteNamespace(deleteNamespace)
+                .build()
+            )
+            .install();
+    }
+
+    @BeforeAll
+    void setup() {
+        assumeTrue(!Environment.isHelmInstall() && !Environment.isOlmInstall());
+    }
+}

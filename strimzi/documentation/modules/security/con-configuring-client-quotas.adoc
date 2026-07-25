@@ -1,0 +1,49 @@
+:_mod-docs-content-type: CONCEPT
+
+// Module included in the following assemblies:
+//
+// assembly-securing-kafka-clients.adoc
+
+[id='con-configuring-client-quotas-{context}']
+= Configuring user quotas
+
+[role="_abstract"]
+Configure the `spec` for the `KafkaUser` resource to enforce quotas so that a user does not overload Kafka brokers.
+Set size-based network usage and time-based CPU utilization thresholds.
+
+Partition mutations occur in response to the following types of user requests:
+
+* Creating partitions for a new topic
+* Adding partitions to an existing topic
+* Deleting partitions from a topic
+
+You can also add a partition mutation quota to control the rate at which requests to change partitions are accepted.
+
+.Example `KafkaUser` with user quotas
+[source,yaml,subs="attributes+"]
+----
+apiVersion: {KafkaUserApiVersion}
+kind: KafkaUser
+metadata:
+  name: my-user
+  labels:
+    strimzi.io/cluster: my-cluster
+spec:
+  # ...
+  quotas:
+    producerByteRate: 1048576 # <1>
+    consumerByteRate: 2097152 # <2>
+    requestPercentage: 55 # <3>
+    controllerMutationRate: 10 # <4>
+----
+<1> Byte-per-second quota on the amount of data the user can push to a Kafka broker.
+<2> Byte-per-second quota on the amount of data the user can fetch from a Kafka broker.
+<3> CPU utilization limit as a percentage of time for a client group.
+<4> Number of concurrent partition creation and deletion operations (mutations) allowed per second.
+
+Using quotas for Kafka clients might be useful in a number of situations.
+Consider a wrongly configured Kafka producer which is sending requests at too high a rate.
+Such misconfiguration can cause a denial of service to other clients, so the problematic client ought to be blocked.
+By using a network limiting quota, it is possible to prevent this situation from significantly impacting other clients.
+
+NOTE: Strimzi supports user-level quotas, but not client-level quotas.

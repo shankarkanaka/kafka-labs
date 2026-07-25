@@ -1,0 +1,62 @@
+:_mod-docs-content-type: PROCEDURE
+
+// Module included in the following assemblies:
+//
+// assembly-kafka-broker-listener-network-policies.adoc
+
+[id='proc-restricting-access-to-listeners-using-network-policies-{context}']
+= Restricting access to listeners with network policies
+
+[role="_abstract"]
+Control listener access by configuring the `networkPolicyPeers` property in the `Kafka` resource.
+
+By default, Strimzi automatically creates a `NetworkPolicy` resource for every enabled Kafka listener, allowing connections from all namespaces.
+
+To restrict listener access to specific applications or namespaces at the network level, configure the `networkPolicyPeers` property.
+Each listener can have its own link:{BookURLConfiguring}#configuration-listener-network-policy-reference[`networkPolicyPeers` configuration].
+For more information on network policy peers, refer to the {K8sNetworkPolicyPeerAPI}.
+
+If you want to use custom network policies, you can set the `STRIMZI_NETWORK_POLICY_GENERATION` environment variable to `false` in the Cluster Operator configuration.
+For more information, see xref:ref-operator-cluster-{context}[].
+
+NOTE: Your configuration of Kubernetes must support ingress `NetworkPolicies` in order to use network policies.
+
+.Prerequisites
+
+* A Kubernetes cluster with support for Ingress NetworkPolicies.
+* The Cluster Operator is running.
+
+.Procedure
+
+. Configure the `networkPolicyPeers` property to define the application pods or namespaces allowed to access the Kafka cluster.
++
+This example shows configuration for a `tls` listener to allow connections only from application pods with the label `app` set to `kafka-client`:
++
+[source,yaml,subs=attributes+]
+----
+apiVersion: {KafkaApiVersion}
+kind: Kafka
+spec:
+  kafka:
+    # ...
+    listeners:
+      - name: tls
+        port: 9093
+        type: internal
+        tls: true
+        authentication:
+          type: tls
+        networkPolicyPeers:
+          - podSelector:
+              matchLabels:
+                app: kafka-client
+    # ...
+----
+
+. Apply the changes to the `Kafka` resource configuration.
+
+[role="_additional-resources"]
+.Additional resources
+
+* link:{BookURLConfiguring}#configuration-listener-network-policy-reference[`networkPolicyPeers` configuration^]
+* {K8sNetworkPolicyPeerAPI}

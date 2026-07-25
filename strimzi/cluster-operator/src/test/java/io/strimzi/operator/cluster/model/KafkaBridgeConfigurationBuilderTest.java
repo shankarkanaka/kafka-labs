@@ -1,0 +1,870 @@
+/*
+ * Copyright Strimzi authors.
+ * License: Apache License 2.0 (see the file LICENSE or http://apache.org/licenses/LICENSE-2.0.html).
+ */
+package io.strimzi.operator.cluster.model;
+
+import io.strimzi.api.kafka.model.bridge.KafkaBridgeAdminClientSpec;
+import io.strimzi.api.kafka.model.bridge.KafkaBridgeAdminClientSpecBuilder;
+import io.strimzi.api.kafka.model.bridge.KafkaBridgeConsumerSpec;
+import io.strimzi.api.kafka.model.bridge.KafkaBridgeConsumerSpecBuilder;
+import io.strimzi.api.kafka.model.bridge.KafkaBridgeHttpConfig;
+import io.strimzi.api.kafka.model.bridge.KafkaBridgeHttpConfigBuilder;
+import io.strimzi.api.kafka.model.bridge.KafkaBridgeProducerSpec;
+import io.strimzi.api.kafka.model.bridge.KafkaBridgeProducerSpecBuilder;
+import io.strimzi.api.kafka.model.bridge.KafkaBridgeSpecBuilder;
+import io.strimzi.api.kafka.model.common.ClientTls;
+import io.strimzi.api.kafka.model.common.ClientTlsBuilder;
+import io.strimzi.api.kafka.model.common.EnvironmentVariableRackBuilder;
+import io.strimzi.api.kafka.model.common.TopologyLabelRackBuilder;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationCustom;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationCustomBuilder;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationPlain;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationPlainBuilder;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationScramSha256;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationScramSha256Builder;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationScramSha512;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationScramSha512Builder;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationTls;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationTlsBuilder;
+import io.strimzi.api.kafka.model.common.metrics.JmxPrometheusExporterMetrics;
+import io.strimzi.api.kafka.model.common.metrics.StrimziMetricsReporter;
+import io.strimzi.api.kafka.model.common.tracing.OpenTelemetryTracing;
+import io.strimzi.operator.cluster.model.metrics.JmxPrometheusExporterModel;
+import io.strimzi.operator.cluster.model.metrics.StrimziMetricsReporterConfig;
+import io.strimzi.operator.cluster.model.metrics.StrimziMetricsReporterModel;
+import io.strimzi.operator.common.Reconciliation;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Map;
+
+import static io.strimzi.operator.cluster.TestUtils.IsEquivalent.isEquivalent;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.MatcherAssert.assertThat;
+
+public class KafkaBridgeConfigurationBuilderTest {
+
+    private static final String BRIDGE_CLUSTER = "my-bridge";
+    private static final String BRIDGE_BOOTSTRAP_SERVERS = "my-cluster-kafka-bootstrap:9092";
+
+    @Test
+    public void testBaseConfiguration()  {
+        // test base/default bridge configuration
+        String configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS).build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT"
+        ));
+    }
+
+    @Test
+    public void testConfigProviders() {
+        // test config providers setting
+        String configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withKafkaAdminClient(null)
+                .withKafkaProducer(null)
+                .withKafkaConsumer(null, null)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "kafka.admin.config.providers=strimzienv,strimzifile,strimzidir,strimzisecrets",
+                "kafka.admin.config.providers.strimzienv.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider",
+                "kafka.admin.config.providers.strimzienv.param.allowlist.pattern=.*",
+                "kafka.admin.config.providers.strimzifile.class=org.apache.kafka.common.config.provider.FileConfigProvider",
+                "kafka.admin.config.providers.strimzifile.param.allowed.paths=/opt/strimzi",
+                "kafka.admin.config.providers.strimzidir.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider",
+                "kafka.admin.config.providers.strimzidir.param.allowed.paths=/opt/strimzi",
+                "kafka.admin.config.providers.strimzisecrets.class=io.strimzi.kafka.KubernetesSecretConfigProvider",
+                "kafka.producer.config.providers=strimzienv,strimzifile,strimzidir,strimzisecrets",
+                "kafka.producer.config.providers.strimzienv.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider",
+                "kafka.producer.config.providers.strimzienv.param.allowlist.pattern=.*",
+                "kafka.producer.config.providers.strimzifile.class=org.apache.kafka.common.config.provider.FileConfigProvider",
+                "kafka.producer.config.providers.strimzifile.param.allowed.paths=/opt/strimzi",
+                "kafka.producer.config.providers.strimzidir.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider",
+                "kafka.producer.config.providers.strimzidir.param.allowed.paths=/opt/strimzi",
+                "kafka.producer.config.providers.strimzisecrets.class=io.strimzi.kafka.KubernetesSecretConfigProvider",
+                "kafka.consumer.config.providers=strimzienv,strimzifile,strimzidir,strimzisecrets",
+                "kafka.consumer.config.providers.strimzienv.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider",
+                "kafka.consumer.config.providers.strimzienv.param.allowlist.pattern=.*",
+                "kafka.consumer.config.providers.strimzifile.class=org.apache.kafka.common.config.provider.FileConfigProvider",
+                "kafka.consumer.config.providers.strimzifile.param.allowed.paths=/opt/strimzi",
+                "kafka.consumer.config.providers.strimzidir.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider",
+                "kafka.consumer.config.providers.strimzidir.param.allowed.paths=/opt/strimzi",
+                "kafka.consumer.config.providers.strimzisecrets.class=io.strimzi.kafka.KubernetesSecretConfigProvider"
+        ));
+    }
+
+    @Test
+    public void testTracing() {
+        // test no tracing configured
+        String configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS).build();
+        assertThat(configuration, not(containsString("bridge.tracing")));
+
+        // test opentelemetry tracing enabled
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withTracing(new OpenTelemetryTracing())
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "bridge.tracing=opentelemetry"
+        ));
+    }
+
+    @Test
+    public void testTls() {
+        // test TLS configuration (only server authentication, encryption)
+        ClientTls clientTls = new ClientTlsBuilder()
+                .addNewTrustedCertificate()
+                    .withSecretName("tls-trusted-certificate")
+                    .withCertificate("pem-content")
+                .endTrustedCertificate()
+                .build();
+
+        String configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withTls(clientTls, BRIDGE_CLUSTER)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=SSL",
+                "kafka.ssl.truststore.certificates=${strimzisecrets:namespace/my-bridge-bridge-tls-trusted-certs:ca.crt}",
+                "kafka.ssl.truststore.type=PEM"
+        ));
+
+        // test TLS with mutual authentication (mTLS, server and client authentication)
+        KafkaClientAuthenticationTls tlsAuth = new KafkaClientAuthenticationTlsBuilder()
+                .withNewCertificateAndKey()
+                    .withSecretName("tls-keystore")
+                    .withKey("pem-key")
+                    .withCertificate("pem-content")
+                .endCertificateAndKey()
+                .build();
+
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withTls(clientTls, BRIDGE_CLUSTER)
+                .withAuthentication(tlsAuth)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=SSL",
+                "kafka.ssl.truststore.certificates=${strimzisecrets:namespace/my-bridge-bridge-tls-trusted-certs:ca.crt}",
+                "kafka.ssl.truststore.type=PEM",
+                "kafka.ssl.keystore.certificate.chain=${strimzisecrets:namespace/tls-keystore:pem-content}",
+                "kafka.ssl.keystore.key=${strimzisecrets:namespace/tls-keystore:pem-key}",
+                "kafka.ssl.keystore.type=PEM"
+        ));
+
+        // test custom authentication without SASL
+        KafkaClientAuthenticationCustom customAuth = new KafkaClientAuthenticationCustomBuilder()
+                .withSasl(false)
+                .withConfig(Map.of("ssl.keystore.location", "/mnt/certs/keystore", "ssl.keystore.password", "changeme", "not.allowed", "foo"))
+                .build();
+
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withTls(clientTls, BRIDGE_CLUSTER)
+                .withAuthentication(customAuth)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=SSL",
+                "kafka.ssl.truststore.certificates=${strimzisecrets:namespace/my-bridge-bridge-tls-trusted-certs:ca.crt}",
+                "kafka.ssl.truststore.type=PEM",
+                "kafka.ssl.keystore.location=/mnt/certs/keystore",
+                "kafka.ssl.keystore.password=changeme"
+        ));
+    }
+
+    @Test
+    public void testSaslMechanism() {
+        // test plain authentication
+        KafkaClientAuthenticationPlain authPlain = new KafkaClientAuthenticationPlainBuilder()
+                .withUsername("user1")
+                .withNewPasswordSecret()
+                    .withSecretName("my-auth-secret")
+                    .withPassword("my-password-key")
+                .endPasswordSecret()
+                .build();
+        String configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withAuthentication(authPlain)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=SASL_PLAINTEXT",
+                "kafka.sasl.mechanism=PLAIN",
+                "kafka.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username=\"user1\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";"
+        ));
+
+        // test plain authentication but with TLS as well (server authentication only, encryption)
+        ClientTls clientTls = new ClientTlsBuilder()
+                .addNewTrustedCertificate()
+                    .withSecretName("tls-trusted-certificate")
+                    .withCertificate("pem-content")
+                .endTrustedCertificate()
+                .build();
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withTls(clientTls, BRIDGE_CLUSTER)
+                .withAuthentication(authPlain)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=SASL_SSL",
+                "kafka.sasl.mechanism=PLAIN",
+                "kafka.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username=\"user1\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";",
+                "kafka.ssl.truststore.certificates=${strimzisecrets:namespace/my-bridge-bridge-tls-trusted-certs:ca.crt}",
+                "kafka.ssl.truststore.type=PEM"
+                ));
+
+        // test scram-sha-256 authentication
+        KafkaClientAuthenticationScramSha256 authScramSha256 = new KafkaClientAuthenticationScramSha256Builder()
+                .withUsername("user1")
+                .withNewPasswordSecret()
+                    .withSecretName("my-auth-secret")
+                    .withPassword("my-password-key")
+                .endPasswordSecret()
+                .build();
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withAuthentication(authScramSha256)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=SASL_PLAINTEXT",
+                "kafka.sasl.mechanism=SCRAM-SHA-256",
+                "kafka.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username=\"user1\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";"
+        ));
+
+        // test scram-sha-512 authentication
+        KafkaClientAuthenticationScramSha512 authScramSha512 = new KafkaClientAuthenticationScramSha512Builder()
+                .withUsername("user1")
+                .withNewPasswordSecret()
+                    .withSecretName("my-auth-secret")
+                    .withPassword("my-password-key")
+                .endPasswordSecret()
+                .build();
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withAuthentication(authScramSha512)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=SASL_PLAINTEXT",
+                "kafka.sasl.mechanism=SCRAM-SHA-512",
+                "kafka.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username=\"user1\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";"
+        ));
+
+        // test custom authentication
+        KafkaClientAuthenticationCustom authCustom = new KafkaClientAuthenticationCustomBuilder()
+                .withSasl()
+                .withConfig(Map.of("sasl.mechanism", "AWS_MSK_IAM", "sasl.jaas.config", "software.amazon.msk.auth.iam.IAMLoginModule required;", "sasl.client.callback.handler.class", "software.amazon.msk.auth.iam.IAMClientCallbackHandler", "not.allowed", "foo"))
+                .build();
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withAuthentication(authCustom)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=SASL_PLAINTEXT",
+                "kafka.sasl.mechanism=AWS_MSK_IAM",
+                "kafka.sasl.jaas.config=software.amazon.msk.auth.iam.IAMLoginModule required;",
+                "kafka.sasl.client.callback.handler.class=software.amazon.msk.auth.iam.IAMClientCallbackHandler"
+        ));
+    }
+
+    @Test
+    public void testKafkaProducer() {
+        // test missing Kafka Producer configuration
+        String configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .build();
+        assertThat(configuration, not(containsString("kafka.producer.")));
+
+        // test some Kafka Producer parameters
+        KafkaBridgeProducerSpec kafkaBridgeProducer = new KafkaBridgeProducerSpecBuilder()
+                .withConfig(
+                        Map.of(
+                                "acks", 1,
+                                "linger.ms", 100,
+                                "key.serializer", "my-producer-key-serializer",
+                                "value.serializer", "my-producer-value-serializer"
+                        ))
+                .build();
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withKafkaProducer(kafkaBridgeProducer)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "kafka.producer.acks=1",
+                "kafka.producer.linger.ms=100",
+                "kafka.producer.key.serializer=my-producer-key-serializer",
+                "kafka.producer.value.serializer=my-producer-value-serializer",
+                "kafka.producer.config.providers=strimzienv,strimzifile,strimzidir,strimzisecrets",
+                "kafka.producer.config.providers.strimzienv.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider",
+                "kafka.producer.config.providers.strimzienv.param.allowlist.pattern=.*",
+                "kafka.producer.config.providers.strimzifile.class=org.apache.kafka.common.config.provider.FileConfigProvider",
+                "kafka.producer.config.providers.strimzifile.param.allowed.paths=/opt/strimzi",
+                "kafka.producer.config.providers.strimzidir.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider",
+                "kafka.producer.config.providers.strimzidir.param.allowed.paths=/opt/strimzi",
+                "kafka.producer.config.providers.strimzisecrets.class=io.strimzi.kafka.KubernetesSecretConfigProvider"
+        ));
+
+        // Kafka Producer with config providers
+        kafkaBridgeProducer = new KafkaBridgeProducerSpecBuilder()
+                .withConfig(
+                        Map.of(
+                                "acks", 1,
+                                "linger.ms", 100,
+                                "key.serializer", "my-producer-key-serializer",
+                                "value.serializer", "my-producer-value-serializer",
+                                "config.providers", "env",
+                                "config.providers.env.class", "org.apache.kafka.common.config.provider.EnvVarConfigProvider"
+                        ))
+                .build();
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withKafkaProducer(kafkaBridgeProducer)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "kafka.producer.acks=1",
+                "kafka.producer.linger.ms=100",
+                "kafka.producer.key.serializer=my-producer-key-serializer",
+                "kafka.producer.value.serializer=my-producer-value-serializer",
+                "kafka.producer.config.providers=env,strimzienv,strimzifile,strimzidir,strimzisecrets",
+                "kafka.producer.config.providers.strimzienv.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider",
+                "kafka.producer.config.providers.strimzienv.param.allowlist.pattern=.*",
+                "kafka.producer.config.providers.strimzifile.class=org.apache.kafka.common.config.provider.FileConfigProvider",
+                "kafka.producer.config.providers.strimzifile.param.allowed.paths=/opt/strimzi",
+                "kafka.producer.config.providers.strimzidir.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider",
+                "kafka.producer.config.providers.strimzidir.param.allowed.paths=/opt/strimzi",
+                "kafka.producer.config.providers.env.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider",
+                "kafka.producer.config.providers.strimzisecrets.class=io.strimzi.kafka.KubernetesSecretConfigProvider"
+        ));
+    }
+
+    @Test
+    public void testKafkaConsumer() {
+        // test missing Kafka Consumer configuration
+        String configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .build();
+        assertThat(configuration, not(containsString("kafka.consumer.")));
+
+        // test some Kafka Consumer parameters
+        KafkaBridgeConsumerSpec kafkaBridgeConsumer = new KafkaBridgeConsumerSpecBuilder()
+                .withConfig(
+                        Map.of(
+                                "auto.offset.reset", "earliest",
+                                "key.deserializer", "my-consumer-key-deserializer",
+                                "value.deserializer", "my-consumer-value-deserializer"
+                        ))
+                .build();
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withKafkaConsumer(kafkaBridgeConsumer, null)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "kafka.consumer.auto.offset.reset=earliest",
+                "kafka.consumer.key.deserializer=my-consumer-key-deserializer",
+                "kafka.consumer.value.deserializer=my-consumer-value-deserializer",
+                "kafka.consumer.config.providers=strimzienv,strimzifile,strimzidir,strimzisecrets",
+                "kafka.consumer.config.providers.strimzienv.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider",
+                "kafka.consumer.config.providers.strimzienv.param.allowlist.pattern=.*",
+                "kafka.consumer.config.providers.strimzifile.class=org.apache.kafka.common.config.provider.FileConfigProvider",
+                "kafka.consumer.config.providers.strimzifile.param.allowed.paths=/opt/strimzi",
+                "kafka.consumer.config.providers.strimzidir.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider",
+                "kafka.consumer.config.providers.strimzidir.param.allowed.paths=/opt/strimzi",
+                "kafka.consumer.config.providers.strimzisecrets.class=io.strimzi.kafka.KubernetesSecretConfigProvider"
+        ));
+
+        // Kafka Consumer with config providers
+        kafkaBridgeConsumer = new KafkaBridgeConsumerSpecBuilder()
+                .withConfig(
+                        Map.of(
+                                "auto.offset.reset", "earliest",
+                                "key.deserializer", "my-consumer-key-deserializer",
+                                "value.deserializer", "my-consumer-value-deserializer",
+                                "config.providers", "env",
+                                "config.providers.env.class", "org.apache.kafka.common.config.provider.EnvVarConfigProvider"
+                        ))
+                .build();
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withKafkaConsumer(kafkaBridgeConsumer, null)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "kafka.consumer.auto.offset.reset=earliest",
+                "kafka.consumer.key.deserializer=my-consumer-key-deserializer",
+                "kafka.consumer.value.deserializer=my-consumer-value-deserializer",
+                "kafka.consumer.config.providers=env,strimzienv,strimzifile,strimzidir,strimzisecrets",
+                "kafka.consumer.config.providers.strimzienv.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider",
+                "kafka.consumer.config.providers.strimzienv.param.allowlist.pattern=.*",
+                "kafka.consumer.config.providers.strimzifile.class=org.apache.kafka.common.config.provider.FileConfigProvider",
+                "kafka.consumer.config.providers.strimzifile.param.allowed.paths=/opt/strimzi",
+                "kafka.consumer.config.providers.strimzidir.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider",
+                "kafka.consumer.config.providers.strimzidir.param.allowed.paths=/opt/strimzi",
+                "kafka.consumer.config.providers.env.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider",
+                "kafka.consumer.config.providers.strimzisecrets.class=io.strimzi.kafka.KubernetesSecretConfigProvider"
+        ));
+
+        // Kafka Consumer with topology-label-based rack
+        kafkaBridgeConsumer = new KafkaBridgeConsumerSpecBuilder()
+                .withConfig(Map.of())
+                .build();
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withKafkaConsumer(kafkaBridgeConsumer, new TopologyLabelRackBuilder().withTopologyKey("rack-label").build())
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "kafka.consumer.client.rack=${strimzidir:/opt/strimzi/init:rack.id}",
+                "kafka.consumer.config.providers=strimzienv,strimzifile,strimzidir,strimzisecrets",
+                "kafka.consumer.config.providers.strimzienv.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider",
+                "kafka.consumer.config.providers.strimzienv.param.allowlist.pattern=.*",
+                "kafka.consumer.config.providers.strimzifile.class=org.apache.kafka.common.config.provider.FileConfigProvider",
+                "kafka.consumer.config.providers.strimzifile.param.allowed.paths=/opt/strimzi",
+                "kafka.consumer.config.providers.strimzidir.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider",
+                "kafka.consumer.config.providers.strimzidir.param.allowed.paths=/opt/strimzi",
+                "kafka.consumer.config.providers.strimzisecrets.class=io.strimzi.kafka.KubernetesSecretConfigProvider"
+        ));
+
+        // Kafka Consumer with envvar-based rack
+        kafkaBridgeConsumer = new KafkaBridgeConsumerSpecBuilder()
+                .withConfig(Map.of())
+                .build();
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withKafkaConsumer(kafkaBridgeConsumer, new EnvironmentVariableRackBuilder().withEnvVarName("MY_RACK_ID").build())
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "kafka.consumer.client.rack=${strimzienv:MY_RACK_ID}",
+                "kafka.consumer.config.providers=strimzienv,strimzifile,strimzidir,strimzisecrets",
+                "kafka.consumer.config.providers.strimzienv.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider",
+                "kafka.consumer.config.providers.strimzienv.param.allowlist.pattern=.*",
+                "kafka.consumer.config.providers.strimzifile.class=org.apache.kafka.common.config.provider.FileConfigProvider",
+                "kafka.consumer.config.providers.strimzifile.param.allowed.paths=/opt/strimzi",
+                "kafka.consumer.config.providers.strimzidir.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider",
+                "kafka.consumer.config.providers.strimzidir.param.allowed.paths=/opt/strimzi",
+                "kafka.consumer.config.providers.strimzisecrets.class=io.strimzi.kafka.KubernetesSecretConfigProvider"
+        ));
+    }
+
+    @Test
+    public void testKafkaAdminClient() {
+        // test missing Kafka Admin configuration
+        String configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .build();
+        assertThat(configuration, not(containsString("kafka.admin.")));
+
+        // test some Kafka Admin parameters
+        KafkaBridgeAdminClientSpec kafkaBridgeAdminClient = new KafkaBridgeAdminClientSpecBuilder()
+                .withConfig(
+                        Map.of(
+                                "client.id", "my-admin-client",
+                                "bootstrap.controllers", "my-bootstrap-controllers"
+                        ))
+                .build();
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withKafkaAdminClient(kafkaBridgeAdminClient)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "kafka.admin.client.id=my-admin-client",
+                "kafka.admin.bootstrap.controllers=my-bootstrap-controllers",
+                "kafka.admin.config.providers=strimzienv,strimzifile,strimzidir,strimzisecrets",
+                "kafka.admin.config.providers.strimzienv.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider",
+                "kafka.admin.config.providers.strimzienv.param.allowlist.pattern=.*",
+                "kafka.admin.config.providers.strimzifile.class=org.apache.kafka.common.config.provider.FileConfigProvider",
+                "kafka.admin.config.providers.strimzifile.param.allowed.paths=/opt/strimzi",
+                "kafka.admin.config.providers.strimzidir.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider",
+                "kafka.admin.config.providers.strimzidir.param.allowed.paths=/opt/strimzi",
+                "kafka.admin.config.providers.strimzisecrets.class=io.strimzi.kafka.KubernetesSecretConfigProvider"
+        ));
+
+        // Kafka Admin with config providers
+        kafkaBridgeAdminClient = new KafkaBridgeAdminClientSpecBuilder()
+                .withConfig(
+                        Map.of(
+                                "client.id", "my-admin-client",
+                                "bootstrap.controllers", "my-bootstrap-controllers",
+                                "config.providers", "env",
+                                "config.providers.env.class", "org.apache.kafka.common.config.provider.EnvVarConfigProvider"
+                        ))
+                .build();
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withKafkaAdminClient(kafkaBridgeAdminClient)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "kafka.admin.client.id=my-admin-client",
+                "kafka.admin.bootstrap.controllers=my-bootstrap-controllers",
+                "kafka.admin.config.providers=env,strimzienv,strimzifile,strimzidir,strimzisecrets",
+                "kafka.admin.config.providers.strimzienv.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider",
+                "kafka.admin.config.providers.strimzienv.param.allowlist.pattern=.*",
+                "kafka.admin.config.providers.strimzifile.class=org.apache.kafka.common.config.provider.FileConfigProvider",
+                "kafka.admin.config.providers.strimzifile.param.allowed.paths=/opt/strimzi",
+                "kafka.admin.config.providers.strimzidir.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider",
+                "kafka.admin.config.providers.strimzidir.param.allowed.paths=/opt/strimzi",
+                "kafka.admin.config.providers.env.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider",
+                "kafka.admin.config.providers.strimzisecrets.class=io.strimzi.kafka.KubernetesSecretConfigProvider"
+        ));
+    }
+
+    @SuppressWarnings("checkstyle:MethodLength")
+    @Test
+    public void testHttp() {
+        // test default HTTP configuration.
+        // NOTE: the "http" section is mandatory when using the KafkaBridge custom resource, so we define and set it
+        KafkaBridgeHttpConfig http = new KafkaBridgeHttpConfigBuilder()
+                .build();
+        String configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withHttp(http, null, null)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "http.host=0.0.0.0",
+                "http.port=8080",
+                "http.cors.enabled=false",
+                "http.consumer.enabled=true",
+                "http.timeoutSeconds=-1",
+                "http.producer.enabled=true"
+        ));
+
+        // test different consumer timeout
+        KafkaBridgeConsumerSpec kafkaBridgeConsumer = new KafkaBridgeConsumerSpecBuilder()
+                .withTimeoutSeconds(10000)
+                .build();
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withHttp(http, null, kafkaBridgeConsumer)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "http.host=0.0.0.0",
+                "http.port=8080",
+                "http.cors.enabled=false",
+                "http.consumer.enabled=true",
+                "http.timeoutSeconds=10000",
+                "http.producer.enabled=true"
+        ));
+
+        // test disabling HTTP part of the consumer and producer
+        kafkaBridgeConsumer = new KafkaBridgeConsumerSpecBuilder()
+                .withEnabled(false)
+                .build();
+        KafkaBridgeProducerSpec kafkaBridgeProducer = new KafkaBridgeProducerSpecBuilder()
+                .withEnabled(false)
+                .build();
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withHttp(http, kafkaBridgeProducer, kafkaBridgeConsumer)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "http.host=0.0.0.0",
+                "http.port=8080",
+                "http.cors.enabled=false",
+                "http.consumer.enabled=false",
+                "http.timeoutSeconds=-1",
+                "http.producer.enabled=false"
+        ));
+
+        // test different HTTP port
+        http = new KafkaBridgeHttpConfigBuilder()
+                .withPort(8081)
+                .build();
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withHttp(http, null, null)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "http.host=0.0.0.0",
+                "http.port=8081",
+                "http.cors.enabled=false",
+                "http.consumer.enabled=true",
+                "http.timeoutSeconds=-1",
+                "http.producer.enabled=true"
+        ));
+
+        // test CORS configuration
+        http = new KafkaBridgeHttpConfigBuilder()
+                .withNewCors()
+                    .withAllowedOrigins("https://strimzi.io", "https://cncf.io")
+                    .withAllowedMethods("GET", "POST", "PUT", "DELETE", "PATCH")
+                .endCors()
+                .build();
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withHttp(http, null, null)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "http.host=0.0.0.0",
+                "http.port=8080",
+                "http.cors.enabled=true",
+                "http.cors.allowedOrigins=https://strimzi.io,https://cncf.io",
+                "http.cors.allowedMethods=GET,POST,PUT,DELETE,PATCH",
+                "http.consumer.enabled=true",
+                "http.timeoutSeconds=-1",
+                "http.producer.enabled=true"
+        ));
+
+        // test TLS configuration
+        http = new KafkaBridgeHttpConfigBuilder()
+                .withPort(8443)
+                .withNewTls()
+                    .withNewCertificateAndKey()
+                        .withSecretName("my-secret")
+                        .withCertificate("cert.crt")
+                        .withKey("private.key")
+                    .endCertificateAndKey()
+                    .addToConfig(Map.of("ssl.enabled.protocols", "TLSv1.3", "ssl.enabled.cipher.suites", "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"))
+                .endTls()
+                .build();
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withHttp(http, null, null)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "http.host=0.0.0.0",
+                "http.port=8443",
+                "http.ssl.enable=true",
+                "http.ssl.certificate.location=/opt/strimzi/bridge-http-certs/my-secret/cert.crt",
+                "http.ssl.key.location=/opt/strimzi/bridge-http-certs/my-secret/private.key",
+                "http.ssl.enabled.protocols=TLSv1.3",
+                "http.ssl.enabled.cipher.suites=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+                "http.cors.enabled=false",
+                "http.consumer.enabled=true",
+                "http.timeoutSeconds=-1",
+                "http.producer.enabled=true"
+        ));
+
+        // test TLS configuration with forbidden options filtered
+        http = new KafkaBridgeHttpConfigBuilder()
+                .withPort(8443)
+                .withNewTls()
+                    .withNewCertificateAndKey()
+                        .withSecretName("my-secret")
+                        .withCertificate("cert.crt")
+                        .withKey("private.key")
+                    .endCertificateAndKey()
+                    .addToConfig(Map.of(
+                            "ssl.enabled.protocols", "TLSv1.3",
+                            "ssl.enabled.cipher.suites", "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+                            "ssl.enable", "false",
+                            "ssl.certificate.location", "/tmp/cert",
+                            "ssl.key.location", "/tmp/key",
+                            "ssl.certificate", "certificate-content",
+                            "ssl.key", "key-content"
+                    ))
+                .endTls()
+                .build();
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withHttp(http, null, null)
+                .build();
+        // forbidden options should not appear in the configuration
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "http.host=0.0.0.0",
+                "http.port=8443",
+                "http.ssl.enable=true",
+                "http.ssl.certificate.location=/opt/strimzi/bridge-http-certs/my-secret/cert.crt",
+                "http.ssl.key.location=/opt/strimzi/bridge-http-certs/my-secret/private.key",
+                "http.ssl.enabled.protocols=TLSv1.3",
+                "http.ssl.enabled.cipher.suites=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+                "http.cors.enabled=false",
+                "http.consumer.enabled=true",
+                "http.timeoutSeconds=-1",
+                "http.producer.enabled=true"
+        ));
+        // verify forbidden options are not in the configuration
+        assertThat(configuration, not(containsString("http.ssl.enable=false")));
+        assertThat(configuration, not(containsString("http.ssl.certificate.location=/tmp/cert")));
+        assertThat(configuration, not(containsString("http.ssl.key.location=/tmp/key")));
+        assertThat(configuration, not(containsString("http.ssl.certificate=certificate-content")));
+        assertThat(configuration, not(containsString("http.ssl.key=key-content")));
+    }
+
+    @Test
+    public void testWithStrimziMetricsReporter() {
+        StrimziMetricsReporterModel model = new StrimziMetricsReporterModel(
+                new KafkaBridgeSpecBuilder()
+                        .withNewStrimziMetricsReporterConfig()
+                                .withNewValues()
+                                    .withAllowList("kafka_producer_producer_metrics.*,kafka_producer_kafka_metrics_count_count")
+                                .endValues()
+                        .endStrimziMetricsReporterConfig()
+                        .build(), List.of(".*"));
+
+        String configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withStrimziMetricsReporter(model)
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "bridge.metrics=" + StrimziMetricsReporter.TYPE_STRIMZI_METRICS_REPORTER,
+                "kafka.metric.reporters=" + StrimziMetricsReporterConfig.CLIENT_CLASS,
+                "kafka." + StrimziMetricsReporterConfig.ALLOW_LIST + "=kafka_producer_producer_metrics.*,kafka_producer_kafka_metrics_count_count",
+                "kafka." + StrimziMetricsReporterConfig.LISTENER_ENABLE + "=false",
+                "kafka.security.protocol=PLAINTEXT"
+        ));
+    }
+
+    @Test
+    public void testWithPrometheusJmxExporter() {
+        JmxPrometheusExporterModel model = new JmxPrometheusExporterModel(
+                new KafkaBridgeSpecBuilder()
+                        .withNewJmxPrometheusExporterMetricsConfig()
+                            .withNewValueFrom()
+                                .withNewConfigMapKeyRef("bridge-metrics", "metrics.json", false)
+                            .endValueFrom()
+                        .endJmxPrometheusExporterMetricsConfig()
+                        .build());
+
+        String configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withJmxPrometheusExporter(model)
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "bridge.metrics=" + JmxPrometheusExporterMetrics.TYPE_JMX_EXPORTER,
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "bridge.metrics.exporter.config.path=" + KafkaBridgeCluster.KAFKA_BRIDGE_CONFIG_VOLUME_MOUNT + JmxPrometheusExporterModel.CONFIG_MAP_KEY,
+                "kafka.security.protocol=PLAINTEXT"
+        ));
+    }
+
+    @Test
+    public void testUserConfigurationEmpty() {
+        // test with null user configuration
+        String configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withUserConfiguration(null)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT"
+        ));
+
+        // test with empty user configuration
+        KafkaBridgeConfiguration userConfig = new KafkaBridgeConfiguration(Reconciliation.DUMMY_RECONCILIATION, Map.<String, Object>of().entrySet());
+        configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withUserConfiguration(userConfig)
+                .build();
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT"
+        ));
+    }
+
+    @Test
+    public void testUserConfigurationValid() {
+        // test with valid custom user configuration
+        Map<String, Object> map = Map.of(
+                "bridge.executor.pool.size", "20",
+                "bridge.executor.queue.size", "1000"
+        );
+        KafkaBridgeConfiguration userConfig = new KafkaBridgeConfiguration(Reconciliation.DUMMY_RECONCILIATION, map.entrySet());
+
+        String configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withUserConfiguration(userConfig)
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "bridge.executor.pool.size=20",
+                "bridge.executor.queue.size=1000"
+        ));
+    }
+
+    @Test
+    public void testUserConfigurationForbiddenPrefixes() {
+        // test forbidden prefixes kafka.*, http.*, bridge.metrics.* are filtered out
+        Map<String, Object> map = Map.of(
+                "bridge.executor.pool.size", "20",
+                "kafka.bootstrap.servers", "should-be-filtered",
+                "http.port", "9999",
+                "bridge.metrics.enabled", "true"
+        );
+        KafkaBridgeConfiguration userConfig = new KafkaBridgeConfiguration(Reconciliation.DUMMY_RECONCILIATION, map.entrySet());
+
+        String configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withUserConfiguration(userConfig)
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "bridge.executor.pool.size=20"
+        ));
+        // verify forbidden properties are not in the configuration
+        assertThat(configuration, not(containsString("kafka.bootstrap.servers=should-be-filtered")));
+        assertThat(configuration, not(containsString("http.port=9999")));
+        assertThat(configuration, not(containsString("bridge.metrics.enabled=true")));
+    }
+
+    @Test
+    public void testUserConfigurationForbiddenExactOptions() {
+        // test forbidden exact options are filtered out but similar properties are allowed
+        Map<String, Object> map = Map.of(
+                "bridge.executor.pool.size", "20",
+                "bridge.id", "should-be-filtered",
+                "bridge.tracing", "should-be-filtered",
+                "bridge.metrics", "should-be-filtered"
+        );
+        KafkaBridgeConfiguration userConfig = new KafkaBridgeConfiguration(Reconciliation.DUMMY_RECONCILIATION, map.entrySet());
+
+        String configuration = new KafkaBridgeConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BRIDGE_CLUSTER, BRIDGE_BOOTSTRAP_SERVERS)
+                .withUserConfiguration(userConfig)
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bridge.id=my-bridge",
+                "kafka.bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "kafka.security.protocol=PLAINTEXT",
+                "bridge.executor.pool.size=20"
+        ));
+        // verify forbidden exact options are not in the configuration
+        assertThat(configuration, not(containsString("bridge.id=should-be-filtered")));
+        assertThat(configuration, not(containsString("bridge.tracing=should-be-filtered")));
+        assertThat(configuration, not(containsString("bridge.metrics=should-be-filtered")));
+    }
+}

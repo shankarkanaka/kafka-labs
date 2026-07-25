@@ -1,0 +1,42 @@
+/*
+ * Copyright Strimzi authors.
+ * License: Apache License 2.0 (see the file LICENSE or http://apache.org/licenses/LICENSE-2.0.html).
+ */
+package io.strimzi.test.k8s.cluster;
+
+import io.skodjob.kubetest4j.clients.KubeClusterException;
+import io.skodjob.kubetest4j.executor.Exec;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import java.util.Arrays;
+import java.util.List;
+
+public class OpenShift implements KubeCluster {
+
+    private static final String CMD = "oc";
+    public static final String OLM_SOURCE_NAMESPACE = "openshift-marketplace";
+    public static final String DEFAULT_NAMESPACE = "default";
+    private static final Logger LOGGER = LogManager.getLogger(OpenShift.class);
+
+    @Override
+    public boolean isAvailable() {
+        return Exec.isExecutableOnPath(CMD);
+    }
+
+    @Override
+    public boolean isClusterUp() {
+        List<String> cmd = Arrays.asList(CMD, "status", "-n", DEFAULT_NAMESPACE);
+        try {
+            return Exec.exec(cmd).exitStatus() && Exec.exec(CMD, "api-versions").out().contains("openshift.io");
+        } catch (KubeClusterException e) {
+            LOGGER.debug("'{}' failed. Please double check connectivity to your cluster!", String.join(" ", cmd));
+            LOGGER.debug(e);
+            return false;
+        }
+    }
+
+    public String toString() {
+        return CMD;
+    }
+}

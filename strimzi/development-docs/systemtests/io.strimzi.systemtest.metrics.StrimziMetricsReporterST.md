@@ -1,0 +1,125 @@
+# StrimziMetricsReporterST
+
+**Description:** This test suite is designed for testing metrics exposed by the Strimzi Metrics Reporter.
+
+**Before test execution steps:**
+
+| Step | Action | Result |
+| - | - | - |
+| 1. | Create namespace {@namespace}. | Namespace {@namespace} is created. |
+| 2. | Deploy Cluster Operator. | Cluster Operator is deployed. |
+| 3. | Deploy Kafka {@clusterName} with Strimzi Metrics Reporter. | Kafka @{clusterName} is deployed. |
+| 4. | Deploy scraper Pod in namespace {@namespace} for collecting metrics from Strimzi pods. | Scraper Pod is deployed. |
+| 5. | Create KafkaTopic resource. | KafkaTopic resource is Ready. |
+| 6. | Create collector for Kafka. | Metrics collected in collectors structs. |
+
+**After test execution steps:**
+
+| Step | Action | Result |
+| - | - | - |
+| 1. | Common cleaning of all resources created by this test class. | All resources deleted. |
+
+**Labels:**
+
+* [metrics](labels/metrics.md)
+
+<hr style="border:1px solid">
+
+## testDynamicReconfigurationAllowList
+
+**Description:** Test checking that `prometheus.metrics.reporter.allowlist` configuration is dynamically updatable using the .spec.kafka.metricsConfig.allowList.
+
+**Steps:**
+
+| Step | Action | Result |
+| - | - | - |
+| 1. | Check that `kafka_server_replicamanager_leadercount` is present and `kafka_log_log_logendoffset` not - in already deployed Kafka cluster | `kafka_server_replicamanager_leadercount` is present and `kafka_log_log_logendoffset` not. |
+| 2. | In already deployed Kafka cluster, change the configuration of the allowList to have just `kafka_log.*` metrics allowed. | The configuration of allowList is changed. |
+| 3. | Wait some time to verify that there will be no rolling update because of the change - verification of dynamic reconfiguration. | No Pods were rolled. |
+| 4. | Collect metrics and check that there is no metric like `kafka_server_replicamanager_leadercount` (because of removal of `kafka_server.*` metrics from allowList). | No metric has been found. |
+| 5. | Check that collected metrics contain `kafka_log_log_logstartoffset` metric for the `__cluster_metadata` topic. | Metric is present. |
+| 6. | Change the allowList back to previous state - allowing just `kafka_server.*` | The configuration of allowList is changed. |
+| 7. | Wait some time to verify that there will be no rolling update because of the change - verification of dynamic reconfiguration. | No Pods were rolled. |
+| 8. | Check that `kafka_server_replicamanager_leadercount` is present and `kafka_log_log_logendoffset` not - configuration change was successful | `kafka_server_replicamanager_leadercount` is present and `kafka_log_log_logendoffset` not. |
+
+**Labels:**
+
+* [kafka](labels/kafka.md)
+* [metrics](labels/metrics.md)
+* `dynamic-configuration` (description file doesn't exist)
+
+
+## testKafkaBridgeMetrics
+
+**Description:** This test case checks several metrics exposed by KafkaBridge.
+
+**Steps:**
+
+| Step | Action | Result |
+| - | - | - |
+| 1. | Deploy KafkaBridge into {@namespace}. | KafkaBridge is deployed and Ready |
+| 2. | Attach producer and consumer clients to KafkaBridge | Clients are up and running, continuously producing and pooling messages |
+| 3. | Collect metrics from KafkaBridge pod | Metrics are collected |
+| 4. | Check that specific metric is available in collected metrics from KafkaBridge pods | Metric is available with expected value |
+
+**Labels:**
+
+* [kafka](labels/kafka.md)
+* [metrics](labels/metrics.md)
+* [bridge](labels/bridge.md)
+
+
+## testKafkaConnectAndConnectorMetrics
+
+**Description:** This test case checks several random metrics exposed by Kafka Connect.
+
+**Steps:**
+
+| Step | Action | Result |
+| - | - | - |
+| 1. | Deploy KafkaConnect into {@namespace}. | KafkaConnect is up and running. |
+| 2. | Create KafkaConnector for KafkaConnect from step 1. | KafkaConnector is in Ready state. |
+| 3. | Create metrics collector and collect metrics from KafkaConnect Pods. | Metrics are collected. |
+| 4. | Check if specific metric is available in collected metrics from KafkaConnect Pods. | Metric is available with expected value. |
+
+**Labels:**
+
+* [kafka](labels/kafka.md)
+* [metrics](labels/metrics.md)
+* [connect](labels/connect.md)
+
+
+## testKafkaMetrics
+
+**Description:** This test case checks several metrics exposed by Kafka.
+
+**Steps:**
+
+| Step | Action | Result |
+| - | - | - |
+| 1. | Check if specific metrics are available in collected metrics from Kafka Pods. | Metrics are available with expected values. |
+
+**Labels:**
+
+* [kafka](labels/kafka.md)
+* [metrics](labels/metrics.md)
+
+
+## testMirrorMaker2Metrics
+
+**Description:** This test case checks several metrics exposed by KafkaMirrorMaker2.
+
+**Steps:**
+
+| Step | Action | Result |
+| - | - | - |
+| 1. | Deploy KafkaMirrorMaker2 into {@namespace}. | KafkaMirrorMaker2 is in Ready state. |
+| 2. | Collect metrics from KafkaMirrorMaker2 pod. | Metrics are collected. |
+| 3. | Check if specific metric is available in collected metrics from KafkaMirrorMaker2 pods. | Metric is available with expected value. |
+
+**Labels:**
+
+* [kafka](labels/kafka.md)
+* [metrics](labels/metrics.md)
+* [mirror-maker-2](labels/mirror-maker-2.md)
+

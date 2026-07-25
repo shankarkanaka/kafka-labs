@@ -1,0 +1,115 @@
+:_mod-docs-content-type: PROCEDURE
+
+[id='proc-configuring-kafka-connect-user-authorization-{context}']
+= Granting Kafka Connect access to Kafka resources
+
+[role="_abstract"]
+When Kafka authorization is enabled, grant the Kafka Connect user access to the internal topics and consumer group used by Kafka Connect.
+This procedure shows how to configure ACLs using simple authorization.
+
+By default, Strimzi configures the Kafka Connect cluster group ID and internal topic names.
+You can define them explicitly in the `spec` of the `KafkaConnect` resource.
+This is required when xref:con-config-kafka-connect-multiple-instances-{context}[running multiple Kafka Connect instances], because the group ID and internal topic names must be unique for each instance.
+
+Simple authorization uses ACL rules managed by the Kafka `StandardAuthorizer` plugin to control access to Kafka resources.
+For more information on configuring a `KafkaUser` resource, see the link:{BookURLConfiguring}#type-AclRule-reference[`AclRule` schema reference^].
+
+To enforce the permissions defined in a `KafkaUser` resource, the Kafka listener must enable an authentication mechanism that allows Kafka Connect to identify as that user.
+Configure authentication on the Kafka listener in the `Kafka` resource and in the `KafkaConnect` resource.
+For more information, see xref:con-config-kafka-connect-securing-connections-{context}[Securing Kafka Connect connections].
+
+.Prerequisites
+
+* A Kubernetes cluster
+* A running Cluster Operator
+* Kafka authorization enabled for the Kafka cluster
+
+.Procedure
+
+. Edit the `authorization` property in the `KafkaUser` resource to grant access to the Kafka Connect user.
++
+Access rights are configured using `literal` resource names.
+The following table shows the default names used for the internal topics and cluster group.
++
+.Names for the access rights configuration
+[table,stripes=none]
+|===
+|Property |Name
+
+|`offset.storage.topic`
+|`connect-cluster-offsets`
+
+|`status.storage.topic`
+|`connect-cluster-status`
+
+|`config.storage.topic`
+|`connect-cluster-configs`
+
+|`group`
+|`connect-cluster`
+|===
++
+If you configured different names in the `KafkaConnect` resource, use those values when defining the ACLs. 
+In addition to the internal topics and cluster group, add ACLs for any topics or consumer groups used by your connectors.
++
+.Example configuration for simple authorization
+[source,yaml,subs="attributes+"]
+----
+apiVersion: {KafkaUserApiVersion}
+kind: KafkaUser
+metadata:
+  name: my-user
+  labels:
+    strimzi.io/cluster: my-cluster
+spec:
+  # ...
+  authorization:
+    type: simple
+    acls:
+      # access to offset.storage.topic
+      - resource:
+          type: topic
+          name: connect-cluster-offsets
+          patternType: literal
+        operations:
+          - Create
+          - Describe
+          - Read
+          - Write
+        host: "*"
+      # access to status.storage.topic
+      - resource:
+          type: topic
+          name: connect-cluster-status
+          patternType: literal
+        operations:
+          - Create
+          - Describe
+          - Read
+          - Write
+        host: "*"
+      # access to config.storage.topic
+      - resource:
+          type: topic
+          name: connect-cluster-configs
+          patternType: literal
+        operations:
+          - Create
+          - Describe
+          - Read
+          - Write
+        host: "*"
+      # cluster group
+      - resource:
+          type: group
+          name: connect-cluster
+          patternType: literal
+        operations:
+          - Read
+        host: "*"
+----
+
+. Create or update the resource.
++
+[source,shell,subs=+quotes]
+kubectl apply -f <kafka_user_configuration_file>

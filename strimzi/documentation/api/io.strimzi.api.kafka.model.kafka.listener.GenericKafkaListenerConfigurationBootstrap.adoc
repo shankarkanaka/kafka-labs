@@ -1,0 +1,29 @@
+:_mod-docs-content-type: CONCEPT
+
+Configures bootstrap service settings for listeners.
+
+Example configuration for the `host`, `nodePort`, `loadBalancerIP`, and `annotations` properties is shown in the xref:type-GenericKafkaListenerConfiguration-reference[`GenericKafkaListenerConfiguration` schema] section.
+
+[id='property-listener-config-altnames-{context}']
+= Specifying alternative bootstrap addresses
+
+To specify alternative names for the bootstrap address, use the `alternativeNames` property.
+This property is applicable to all types of listeners.
+The names are added to the broker certificates and can be used for TLS hostname verification.
+
+.Example `route` listener configuration with additional bootstrap addresses
+[source,yaml,subs="attributes+"]
+----
+listeners:
+  #...
+  - name: external1
+    port: 9094
+    type: route
+    tls: true
+    configuration:
+      bootstrap:
+        alternativeNames:
+          - example.hostname1
+          - example.hostname2 
+# ...
+----

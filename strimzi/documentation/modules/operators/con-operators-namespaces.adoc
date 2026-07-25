@@ -1,0 +1,51 @@
+:_mod-docs-content-type: CONCEPT
+
+// Module included in the following assemblies:
+//
+// assembly-deploy-intro-operators.adoc
+
+[id='con-operators-namespaces-{context}']
+
+= Operator-watched Kafka resources
+
+[role="_abstract"]
+Operators watch and manage Kafka resources within defined Kubernetes namespaces.
+The namespace scope of where each operator can watch these resources differs.
+
+You can choose the namespace scope for the Cluster Operator.
+The Topic Operator and the User Operator can only watch a single Kafka cluster in a namespace. 
+And they can only be connected to a single Kafka cluster.
+
+WARNING:  While the operator can be configured to watch multiple namespaces, each watched namespace should contain only one instance of a specific component type, such as one Kafka cluster, to avoid conflicts.
+
+.Operator resource and scope
+[cols="3,4m,3",options="header"]
+|===
+| Operator | Watched resources | Namespace scope
+
+| **Cluster Operator**
+|
+Kafka +
+KafkaNodePool +
+KafkaConnect +
+KafkaConnector +
+KafkaMirrorMaker2 +
+KafkaBridge +
+KafkaRebalance +
+| Single, multiple, or all
+
+| **Topic Operator**
+| KafkaTopic
+| Single namespace (one Kafka cluster only)
+
+| **User Operator**
+| KafkaUser
+| Single namespace (one Kafka cluster only)
+ifdef::Section[]
+| **Access Operator**
+| KafkaAccess
+| Single or all
+endif::Section[]
+|===
+
+NOTE: For a standalone deployment of the Topic Operator or User Operator, you specify a namespace and connection to the Kafka cluster to watch in the configuration.

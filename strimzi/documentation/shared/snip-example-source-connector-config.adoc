@@ -1,0 +1,39 @@
+:_mod-docs-content-type: SNIPPET
+
+//source connector example
+[source,yaml,subs="attributes+"]
+----
+apiVersion: {KafkaConnectApiVersion}
+kind: KafkaConnector
+metadata:
+  name: my-source-connector
+  labels:
+    strimzi.io/cluster: my-connect-cluster
+spec:
+  class: org.apache.kafka.connect.file.FileStreamSourceConnector
+  tasksMax: 2
+  autoRestart:
+    enabled: true
+  config:
+    file: "/opt/kafka/LICENSE"
+    topic: my-topic
+    # ...
+----
+
+* `metadata.name` specifies the name of the `KafkaConnector` resource.
+This name is also used as the name of the connector.
+Use any name that is valid for a Kubernetes resource.
+* `metadata.labels.strimzi.io/cluster` specifies the Kafka Connect cluster where the connector instance is created.
+The connector must be deployed in the same namespace as the Kafka Connect cluster.
+* `spec.class` specifies the fully qualified class name of the connector.
+The connector class must be available in the Kafka Connect image.
+* `spec.tasksMax` specifies the maximum number of tasks that the connector can create.
+* `spec.autoRestart.enabled` enables automatic restarts for failed connectors and tasks.
+By default, restarts are attempted indefinitely.
+You can limit the number of restarts by setting the `maxRestarts` property.
+* `spec.config` specifies connector configuration as key-value pairs.
+For details of supported properties, see the
+link:{BookURLDeploying}#kafkaconnector-configs[`KafkaConnector` configuration reference^].
+* `spec.config.file` specifies the location of the external data file.
+In this example, the `FileStreamSourceConnector` reads from `/opt/kafka/LICENSE`.
+* `spec.config.topic` specifies the Kafka topic where source records are written.

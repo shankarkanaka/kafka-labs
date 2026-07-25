@@ -1,0 +1,31 @@
+:experimental:
+include::shared/attributes.adoc[]
+
+:context: str
+
+[id="overview-book_{context}"]
+= Strimzi Overview
+
+// Add include directives to include modules and assemblies here
+
+//key features
+include::modules/overview/ref-key-features.adoc[leveloffset=+1]
+//Product components (operators)
+include::assemblies/overview/assembly-overview-components.adoc[leveloffset=+1]
+//Kafka components
+include::assemblies/overview/assembly-kafka-components.adoc[leveloffset=+1]
+//Kafka concepts
+include::assemblies/overview/assembly-kafka-concepts.adoc[leveloffset=+1]
+//Kafka Connect components
+include::assemblies/overview/assembly-kafka-connect-components.adoc[leveloffset=+1]
+//MirrorMaker replication modes
+include::modules/overview/con-overview-mirrormaker2.adoc[leveloffset=+1]
+//description of HTTP bridge
+include::modules/overview/con-overview-components-http-bridge.adoc[leveloffset=+1]
+include::modules/overview/con-overview-components-http-bridge-clients.adoc[leveloffset=+2]
+//Main configuration points
+include::modules/overview/con-configuration-points.adoc[leveloffset=+1]
+//security options
+include::modules/overview/con-security-overview.adoc[leveloffset=+1]
+//Metrics and monitoring
+include::modules/overview/con-metrics-overview.adoc[leveloffset=+1]

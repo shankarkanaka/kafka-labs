@@ -1,0 +1,185 @@
+/*
+ * Copyright Strimzi authors.
+ * License: Apache License 2.0 (see the file LICENSE or http://apache.org/licenses/LICENSE-2.0.html).
+ */
+package io.strimzi.api.kafka.model.connector;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import io.strimzi.api.kafka.model.common.ConnectorState;
+import io.strimzi.api.kafka.model.common.Constants;
+import io.strimzi.api.kafka.model.common.Spec;
+import io.strimzi.crdgenerator.annotations.Description;
+import io.strimzi.crdgenerator.annotations.Minimum;
+import io.sundr.builder.annotations.Buildable;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Abstracts connector config. Connectors for MM2 do not have the {@code className} property
+ * while {@code KafkaConnectors} must have it.
+ */
+@Buildable(
+        editableEnabled = false,
+        builderPackage = Constants.FABRIC8_KUBERNETES_API
+)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonPropertyOrder({"tasksMax", "version", "config", "state", "listOffsets", "alterOffsets"})
+@EqualsAndHashCode(callSuper = true)
+@ToString(callSuper = true)
+public abstract class AbstractConnectorSpec extends Spec {
+    /**
+     * Forbidden options in the connector configuration => these are full options and not prefixes
+     */
+    public static final String FORBIDDEN_PARAMETERS = "name, connector.class, tasks.max, connector.plugin.version";
+
+    private Integer tasksMax;
+    private String version;
+    private Map<String, Object> config = new HashMap<>(0);
+    private ConnectorState state;
+
+    private AutoRestart autoRestart;
+
+    private ListOffsets listOffsets;
+    private AlterOffsets alterOffsets;
+
+    /**
+     * Gets the maximum number of tasks.
+     *
+     * @return  Max number of tasks
+     */
+    @Description("The maximum number of tasks for the Kafka Connector")
+    @Minimum(1)
+    public Integer getTasksMax() {
+        return tasksMax;
+    }
+
+    /**
+     * Sets the maximum number of tasks
+     *
+     * @param tasksMax  Max number of tasks
+     */
+    public void setTasksMax(Integer tasksMax) {
+        this.tasksMax = tasksMax;
+    }
+
+    /**
+     * Gets the version or version range for the Kafka Connector.
+     *
+     * @return Version or version range for the Kafka Connector
+     */
+    @Description("Desired version or version range to respect when starting the Kafka Connector. This is only supported when using Kafka Connect version 4.1.0 and higher.")
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public String getVersion() {
+        return version;
+    }
+
+    /**
+     * Sets the plugin version string for the Kafka Connector
+     *
+     * @param version Version or version range
+     */
+    public void setVersion(String version) {
+        this.version = version;
+    }
+
+    /**
+     * Gets the Kafka Connector configuration.
+     *
+     * @return  Connector configuration
+     */
+    @Description("The Kafka Connector configuration. The following properties cannot be set: " + FORBIDDEN_PARAMETERS)
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public Map<String, Object> getConfig() {
+        return config;
+    }
+
+    /**
+     * Sets the connector configuration
+     *
+     * @param config    Map with the connector configuration
+     */
+    public void setConfig(Map<String, Object> config) {
+        this.config = config;
+    }
+
+    /**
+     * Gets the auto-restart configuration of this connector.
+     *
+     * @return  Auto-restart configuration of this connector
+     */
+    @Description("Automatic restart of connector and tasks configuration")
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public AutoRestart getAutoRestart() {
+        return autoRestart;
+    }
+
+    /**
+     * Configures auto-restarting of this connector
+     *
+     * @param autoRestart   Auto-restart configuration
+     */
+    public void setAutoRestart(AutoRestart autoRestart) {
+        this.autoRestart = autoRestart;
+    }
+
+    /**
+     * Gets the state of the connector.
+     *
+     * @return The state of the connector
+     */
+    @Description("The state the connector should be in. Defaults to running.")
+    public ConnectorState getState() {
+        return state;
+    }
+
+    /**
+     * Sets the connector state
+     *
+     * @param state The state of the connector
+     */
+    public void setState(ConnectorState state) {
+        this.state = state;
+    }
+
+    /**
+     * Gets the listOffsets configuration.
+     *
+     * @return The listOffsets configuration.
+     */
+    @Description("Configuration for listing offsets")
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public ListOffsets getListOffsets() {
+        return listOffsets;
+    }
+
+    /**
+     * Sets the configuration for listing connector offsets.
+     * @param listOffsets The listOffsets configuration.
+     */
+    public void setListOffsets(ListOffsets listOffsets) {
+        this.listOffsets = listOffsets;
+    }
+
+    /**
+     * Gets the alterOffsets configuration.
+     *
+     * @return The alterOffsets configuration.
+     */
+    @Description("Configuration for altering offsets")
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public AlterOffsets getAlterOffsets() {
+        return alterOffsets;
+    }
+
+    /**
+     * Sets the configuration for altering connector offsets.
+     * @param alterOffsets The alterOffsets configuration.
+     */
+    public void setAlterOffsets(AlterOffsets alterOffsets) {
+        this.alterOffsets = alterOffsets;
+    }
+}

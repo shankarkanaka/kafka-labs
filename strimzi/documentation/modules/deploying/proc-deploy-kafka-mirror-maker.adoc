@@ -1,0 +1,83 @@
+:_mod-docs-content-type: PROCEDURE
+
+// Module included in the following assemblies:
+//
+// deploying/assembly_deploy-kafka-mirror-maker.adoc
+
+[id='deploying-kafka-mirror-maker-{context}']
+= Deploying Kafka MirrorMaker
+
+[role="_abstract"]
+This procedure shows how to deploy a Kafka MirrorMaker 2 cluster to your Kubernetes cluster using the Cluster Operator.
+
+The deployment uses a YAML file to provide the specification to create a `KafkaMirrorMaker2` resource.
+MirrorMaker 2 is based on Kafka Connect and uses its configuration properties. 
+
+Strimzi provides xref:config-examples-{context}[example configuration files].
+In this procedure, we use the following example file:
+
+* `examples/mirror-maker/kafka-mirror-maker-2.yaml`
+
+WARNING: When deploying multiple Kafka MirrorMaker 2 clusters managed by the Cluster Operator, deploy each cluster into a separate namespace.
+Deploying multiple clusters in the same namespace can lead to naming conflicts and resource collisions.
+
+.Prerequisites
+
+* Cluster Operator is deployed.
+* Kafka cluster is running.
++
+This procedure assumes that the Kafka cluster was deployed using Strimzi.
+
+.Procedure
+
+. Edit the deployment file to configure connection details (if required). 
++ 
+In `examples/mirror-maker/kafka-mirror-maker-2.yaml`, add or update the following properties as needed: 
++
+* `spec.target.bootstrapServers` and `.spec.mirrors[].source.bootstrapServers` to specify the Kafka bootstrap address for the source and target clusters.
+* `spec.target.alias` and `.spec.mirrors[].source.alias` to specify a unique identifier for each cluster.
+* `spec.target.authentication` and `.spec.mirrors[].source.authentication` to specify the authentication type for each cluster as `tls`, `scram-sha-256`, `scram-sha-512`, `plain`, or `custom`.
+See the link:{BookURLConfiguring}#type-KafkaMirrorMaker2ClusterSpec-schema-reference[`KafkaMirrorMaker2Spec` schema properties^] for configuration details.
+* `spec.target.tls.trustedCertificates` and `.spec.mirrors[].source.tls.trustedCertificates` to configure the TLS certificate for each cluster.
+Use `[]` (an empty array) to trust the default Java CAs, or specify secrets containing trusted certificates.
+See the link:{BookURLConfiguring}#con-common-configuration-trusted-certificates-reference[`trustedCertificates` properties^] for configuration details.
+
+. Configure the deployment for multiple MirrorMaker 2 clusters (if required).
++ 
+If you plan to run more than one MirrorMaker 2 cluster in the same environment, each instance must use unique internal topic names and a unique group ID.
++ 
+Update the `spec.target` properties in `kafka-mirror-maker-2.yaml` to replace the default values.
++
+See xref:con-config-mm2-multiple-instances-{context}[Configuring multiple MirrorMaker 2 clusters] for details.
+
+. Deploy Kafka MirrorMaker to your Kubernetes cluster:
++
+[source,shell]
+----
+kubectl apply -f examples/mirror-maker/kafka-mirror-maker-2.yaml
+----
+
+. Check the status of the deployment:
++
+[source,shell]
+----
+kubectl get pods -n <my_cluster_operator_namespace>
+----
++
+.Output shows the deployment name and readiness
+[source,shell]
+----
+NAME                                    READY  STATUS   RESTARTS
+my-mm2-cluster-mirrormaker2-<pod_id>    1/1    Running  1
+----
++
+In this example, `my-mm2-cluster` is the name of the Kafka MirrorMaker 2 cluster.
+A pod ID identifies each created pod.
+By default, the deployment creates a single MirrorMaker 2 pod.
+`READY` shows the number of ready versus expected replicas. 
+The deployment is successful when the `STATUS` is `Running`.
+
+[role="_additional-resources"]
+.Additional resources
+
+* xref:con-config-mirrormaker2-str[Kafka MirrorMaker 2 cluster configuration]

@@ -1,0 +1,30 @@
+:_mod-docs-content-type: CONCEPT
+
+// Module included in the following assemblies:
+//
+// deploying/assembly_deploy-tasks.adoc
+
+[id='con-deploy-paths-{context}']
+= Deployment path 
+
+[role="_abstract"]
+You can configure a deployment where Strimzi manages a single Kafka cluster in the same namespace, suitable for development or testing. 
+Alternatively, Strimzi can manage multiple Kafka clusters across different namespaces in a production environment.
+
+The basic deployment path includes the following steps:
+
+. Create a Kubernetes namespace for the Cluster Operator.
+. Deploy the Cluster Operator based on your chosen deployment method.
+. Deploy the Kafka cluster, including the Topic Operator and User Operator if desired.
+. Optionally, deploy additional components:
+** The Topic Operator and User Operator as standalone components, if not deployed with the Kafka cluster
+** Kafka Connect
+** Kafka MirrorMaker
+** HTTP Bridge
+** Metrics monitoring components
+
+The Cluster Operator creates Kubernetes resources such as `Deployment`, `Service`, and `Pod` for each component. 
+The resource names are appended with the name of the deployed component. 
+For example, a Kafka cluster named `my-kafka-cluster` will have a service named `my-kafka-cluster-kafka`.
+
+

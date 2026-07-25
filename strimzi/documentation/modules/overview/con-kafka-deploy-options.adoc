@@ -1,0 +1,25 @@
+:_mod-docs-content-type: CONCEPT
+
+// This module is included in:
+//
+// overview/assembly-kafka-components.adoc
+
+[id="kafka-deploy-options-{context}"]
+= Deployment options
+
+[role="_abstract"]
+Strimzi can be deployed on Kubernetes using a method that aligns with how you configure and manage your clusters.
+
+Choose from the following options:
+
+* *Manual YAML deployment*: Uses installation files to deploy all required resources, offering fine-tuned configuration and full flexibility.
+* *OperatorHub.io (OLM)*:  Installs Strimzi through the Operator Lifecycle Manager (OLM) and simplifies lifecycle management.
+Delivers a standard configuration that can be updated automatically or manually.
+ifdef::Section[]
+* *Helm chart*: Provides a streamlined and repeatable deployment approach using the Strimzi Helm chart.
+endif::Section[]
+
+[role="_additional-resources"]
+.Additional resources
+
+* link:{BookURLDeploying}[Deploying and Managing Strimzi^]

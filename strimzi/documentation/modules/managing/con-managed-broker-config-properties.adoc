@@ -1,0 +1,29 @@
+:_mod-docs-content-type: CONCEPT
+
+// This module is included in the following files:
+//
+// assembly-tuning-config.adoc
+
+[id='con-managed-broker-config-properties-{context}']
+= Managed broker configurations
+
+[role="_abstract"]
+When you deploy Strimzi on Kubernetes, you can specify broker configuration through the `config` property of the `Kafka` custom resource.
+However, certain broker configuration options are managed directly by Strimzi and cannot be set within this `config` property.
+
+As such, you cannot configure the following options through the `config` property:
+
+* `node.id` to specify the ID of the Kafka node
+* `log.dirs` directories for log data
+* `listeners` to expose the Kafka cluster to clients
+* `authorization` mechanisms to allow or decline actions executed by users
+* `authentication` mechanisms to prove the identity of users requiring access to Kafka
+
+Node IDs start from 0 (zero) and run sequentially across the Kafka cluster.
+Log directories are mounted to `/var/lib/kafka/data/kafka-log<pod_id>` based on the `spec.storage` configuration specified in the `KafkaNodePool` custom resource.
+For JBOD storage, they are mounted at `/var/lib/kafka/data-<volume_id>/kafka-log<pod_id>`.
+
+[role="_additional-resources"]
+.Additional resources
+
+* link:{BookURLConfiguring}#type-KafkaClusterSpec-reference[`KafkaClusterSpec` schema reference for a list of exclusions]

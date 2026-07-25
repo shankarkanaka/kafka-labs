@@ -1,0 +1,61 @@
+:_mod-docs-content-type: PROCEDURE
+
+// Module included in the following assemblies:
+//
+// assembly-config.adoc
+
+[id='proc-manual-stop-pause-connector-{context}']
+= Stopping or pausing Kafka Connect connectors
+
+[role="_abstract"]
+If you are using `KafkaConnector` resources to manage connectors, use the `state` property to stop or pause a connector.
+
+Pausing a connector keeps the connector and tasks instantiated, allowing it to resume quickly.
+Stopping a connector retains only the configuration and stops all running tasks.
+Stopping is more suitable for longer periods, as it frees up memory and resources.
+
+.Prerequisites
+
+* The Cluster Operator is running.
+
+.Procedure
+
+. Find the name of the `KafkaConnector` custom resource that controls the connector you want to pause or stop:
++
+[source,shell,subs="+quotes"]
+----
+kubectl get KafkaConnector
+----
+
+. Edit the `KafkaConnector` resource to stop or pause the connector.
++
+Example configuration to stop a Kafka Connect connector:
++
+[source,yaml,subs="attributes+"]
+----
+apiVersion: {KafkaConnectApiVersion}
+kind: KafkaConnector
+metadata:
+  name: my-source-connector
+  labels:
+    strimzi.io/cluster: my-connect-cluster
+spec:
+  class: org.apache.kafka.connect.file.FileStreamSourceConnector
+  tasksMax: 2
+  config:
+    file: "/opt/kafka/LICENSE"
+    topic: my-topic
+  state: stopped
+  # ...
+----
++
+Change the `state` configuration to `stopped` or `paused`.
+The default state for the connector when this property is not set is `running`.  
+
+. Apply the changes to the `KafkaConnector` configuration.
+
+. To resume the connector, change `state` to `running` or remove the `state` property.
++
+NOTE: Alternatively, you can xref:con-exposing-kafka-connect-api-str[expose the Kafka Connect API] and use the `stop` and `pause` endpoints.
+For example, `PUT /connectors/<connector_name>/stop`.
+Use the `resume` endpoint to restart the connector.

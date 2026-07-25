@@ -1,0 +1,112 @@
+:_mod-docs-content-type: ASSEMBLY
+
+
+// This assembly is included in the following assemblies:
+//
+// metrics/assembly_metrics.adoc
+
+[id='assembly-metrics-config-files-{context}']
+
+= Example metrics files
+
+[role="_abstract"]
+You can find example Grafana dashboards and other metrics configuration files in the xref:config-examples-{context}[example configuration files] provided by Strimzi.
+
+.Example metrics files provided with Strimzi
+[source]
+--
+metrics
+├── grafana-dashboards <1>
+│   ├── strimzi-cruise-control.json
+│   ├── strimzi-kafka-bridge.json
+│   ├── strimzi-kafka-connect.json
+│   ├── strimzi-kafka-exporter.json
+│   ├── strimzi-kafka-mirror-maker-2.json
+|   ├── strimzi-kafka-oauth.json
+│   ├── strimzi-kafka.json
+|   ├── strimzi-kraft.json
+│   ├── strimzi-operators.json
+├── grafana-install
+│   └── grafana.yaml <2>
+├── kube-state-metrics <3>
+│   ├── configmap.yaml
+│   ├── ksm.yaml
+│   └── prometheus-rules.yaml
+├── prometheus-additional-properties
+│   └── prometheus-additional.yaml <4>
+├── prometheus-alertmanager-config
+│   └── alert-manager-config.yaml <5>
+├── prometheus-install
+│    ├── alert-manager.yaml <6>
+│    ├── pod-monitors <7>
+│    │  ├── bridge-metrics.yaml
+│    │  ├── cluster-operator-metrics.yaml
+│    │  ├── entity-operator-metrics.yaml
+│    │  └── kafka-resources-metrics.yaml
+│    ├── prometheus-rules <8>
+│    │  ├── prometheus-kafka-bridge-rules.yaml
+│    │  ├── prometheus-kafka-certificate-rules.yaml
+│    │  ├── prometheus-kafka-connect-rules.yaml
+│    │  ├── prometheus-kafka-rules.yaml
+│    │  ├── prometheus-kafka-exporter-topic-rules.yaml
+│    │  ├── prometheus-mirrormaker2-rules.yaml
+│    │  ├── prometheus-strimzi-cluster-operator-rules.yaml
+│    │  └── prometheus-strimzi-entity-operator-rules.yaml
+│    └── prometheus.yaml <9>
+├── strimzi-metrics-reporter
+|    ├── grafana-dashboards <10>
+|    |  ├── strimzi-kafka.json
+|    |  ├── strimzi-kafka-bridge.json
+|    |  ├── strimzi-kafka-connect.json
+|    |  ├── strimzi-kafka-mirror-maker-2.json
+|    |  ├── strimzi-kraft.json
+│    ├── kafka-bridge-metrics.yaml <11>
+│    ├── kafka-connect-metrics.yaml <12>
+│    ├── kafka-metrics.yaml <13>
+|    └── kafka-mirror-maker-2-metrics.yaml <14>
+├── kafka-bridge-metrics.yaml <15>
+├── kafka-connect-metrics.yaml <16>
+├── kafka-cruise-control-metrics.yaml <17>
+├── kafka-metrics.yaml <18>
+├── kafka-mirror-maker-2-metrics.yaml <19>
+└── oauth-metrics.yaml <20>
+
+--
+<1> Grafana dashboards for components using the JMX Exporter.
+<2> Installation file for the Grafana image.
+<3> Kube-state-metrics deployment and configuration files for custom resource monitoring.
+<4> Additional configuration to scrape metrics for CPU, memory and disk volume usage, which comes directly from the Kubernetes cAdvisor agent and kubelet on the nodes.
+<5> Hook definitions for sending notifications through Alertmanager.
+<6> Resources for deploying and configuring Alertmanager.
+<7> PodMonitor definitions translated by the Prometheus Operator into jobs for the Prometheus server to be able to scrape metrics data directly from pods.
+<8> Alerting rules examples for use with Prometheus Alertmanager (deployed with Prometheus).
+<9> Installation resource file for the Prometheus image.
+<10> Grafana dashboards for components using the Strimzi Metrics Reporter.
+<11> `KafkaBridge` resource for deploying HTTP Bridge with Strimzi Metrics Reporter.
+<12> `KafkaConnect` resource for deploying Kafka Connect with Strimzi Metrics Reporter.
+<13> `Kafka` resource for deploying Kafka with Strimzi Metrics Reporter.
+<14> `KafkaMirrorMaker2` resource for deploying MirrorMaker 2 with Strimzi Metrics Reporter.
+<15> Metrics configuration that defines Prometheus JMX Exporter relabeling rules for HTTP Bridge.
+<16> Metrics configuration that defines Prometheus JMX Exporter relabeling rules for Kafka Connect.
+<17> Metrics configuration that defines Prometheus JMX Exporter relabeling rules for Cruise Control.
+<18> Metrics configuration that defines Prometheus JMX Exporter relabeling rules for Kafka.
+<19> Metrics configuration that defines Prometheus JMX Exporter relabeling rules for MirrorMaker 2.
+<20> Metrics configuration that defines Prometheus JMX Exporter relabeling rules for OAuth 2.0.
+
+NOTE: The Prometheus JMX Exporter collects Java Management Extensions (JMX) from Kafka components and converts them into Prometheus metrics.
+You do not require `jmxOptions` configuration in the custom resource of the component for the Prometheus JMX Exporter to function.
+`jmxOptions` is only required if you need direct access to JMX from Kafka components.
+
+Strimzi uses the {StrimziMetricsReporter} or the {JMXExporter} to expose metrics through an HTTP endpoint, which can be scraped by the Prometheus server.
+
+Strimzi provides example custom resource configuration YAML files with relabeling rules.
+When deploying Prometheus metrics configuration, you can deploy the example custom resource or copy the metrics configuration to your own custom resource definition.
+
+//Example Prometheus JMX metrics files
+include::../../modules/metrics/ref-prometheus-jmx-metrics-config.adoc[leveloffset=+1]
+//Example Strimzi metrics reporter files
+include::../../modules/metrics/ref-strimzi-metrics-reporter-config.adoc[leveloffset=+1]
+//Example Prometheus alert rules
+include::../../modules/metrics/ref_metrics-alertmanager-examples.adoc[leveloffset=+1]
+//Example Grafana dashboards
+include::../../modules/metrics/ref_metrics-dashboards.adoc[leveloffset=+1]

@@ -1,0 +1,727 @@
+/*
+ * Copyright Strimzi authors.
+ * License: Apache License 2.0 (see the file LICENSE or http://apache.org/licenses/LICENSE-2.0.html).
+ */
+package io.strimzi.operator.cluster.model;
+
+import io.strimzi.api.kafka.model.common.ClientTls;
+import io.strimzi.api.kafka.model.common.ClientTlsBuilder;
+import io.strimzi.api.kafka.model.common.EnvironmentVariableRackBuilder;
+import io.strimzi.api.kafka.model.common.TopologyLabelRackBuilder;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationCustom;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationCustomBuilder;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationPlain;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationPlainBuilder;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationScramSha256;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationScramSha256Builder;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationScramSha512;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationScramSha512Builder;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationTls;
+import io.strimzi.api.kafka.model.common.authentication.KafkaClientAuthenticationTlsBuilder;
+import io.strimzi.api.kafka.model.common.metrics.StrimziMetricsReporterBuilder;
+import io.strimzi.api.kafka.model.connect.KafkaConnectSpecBuilder;
+import io.strimzi.operator.cluster.model.metrics.MetricsModel;
+import io.strimzi.operator.cluster.model.metrics.StrimziMetricsReporterConfig;
+import io.strimzi.operator.cluster.model.metrics.StrimziMetricsReporterModel;
+import io.strimzi.operator.common.Reconciliation;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
+
+import static io.strimzi.operator.cluster.TestUtils.IsEquivalent.isEquivalent;
+import static org.hamcrest.MatcherAssert.assertThat;
+
+class KafkaConnectConfigurationBuilderTest {
+    private static final String BOOTSTRAP_SERVERS = "my-cluster-kafka-bootstrap:9092";
+
+    @Test
+    public void testBuild()  {
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS).build();
+        assertThat(configuration, isEquivalent(
+                "bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "security.protocol=PLAINTEXT",
+                "producer.security.protocol=PLAINTEXT",
+                "consumer.security.protocol=PLAINTEXT",
+                "admin.security.protocol=PLAINTEXT"
+        ));
+    }
+
+    @Test
+    public void testInternalTopicsAndGroupId()  {
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withGroupIdAndInternalTopics("my-group", "my-config-topic", "my-status-topic", "my-offset-topic")
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "group.id=my-group",
+                "offset.storage.topic=my-offset-topic",
+                "config.storage.topic=my-config-topic",
+                "status.storage.topic=my-status-topic",
+                "security.protocol=PLAINTEXT",
+                "producer.security.protocol=PLAINTEXT",
+                "consumer.security.protocol=PLAINTEXT",
+                "admin.security.protocol=PLAINTEXT"
+        ));
+    }
+
+    @Test
+    public void testWithTls() {
+        ClientTls clientTls = new ClientTlsBuilder()
+                .addNewTrustedCertificate()
+                    .withSecretName("tls-trusted-certificate")
+                    .withCertificate("pem-content")
+                .endTrustedCertificate()
+                .build();
+
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withTls(clientTls, "my-cluster")
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "security.protocol=SSL",
+                "producer.security.protocol=SSL",
+                "consumer.security.protocol=SSL",
+                "admin.security.protocol=SSL",
+                "ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "ssl.truststore.type=PEM",
+                "producer.ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "producer.ssl.truststore.type=PEM",
+                "consumer.ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "consumer.ssl.truststore.type=PEM",
+                "admin.ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "admin.ssl.truststore.type=PEM"
+        ));
+    }
+
+    @Test
+    public void testWithTlsAndClientAuthentication() {
+        ClientTls clientTls = new ClientTlsBuilder()
+                .addNewTrustedCertificate()
+                    .withSecretName("tls-trusted-certificate")
+                    .withCertificate("pem-content")
+                .endTrustedCertificate()
+                .build();
+
+        KafkaClientAuthenticationTls tlsAuth = new KafkaClientAuthenticationTlsBuilder()
+                .withNewCertificateAndKey()
+                    .withSecretName("tls-keystore")
+                    .withCertificate("pem-content")
+                .endCertificateAndKey()
+                .build();
+
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withTls(clientTls, "my-cluster")
+                .withAuthentication(tlsAuth)
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "security.protocol=SSL",
+                "producer.security.protocol=SSL",
+                "consumer.security.protocol=SSL",
+                "admin.security.protocol=SSL",
+                "ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "ssl.truststore.type=PEM",
+                "producer.ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "producer.ssl.truststore.type=PEM",
+                "consumer.ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "consumer.ssl.truststore.type=PEM",
+                "admin.ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "admin.ssl.truststore.type=PEM",
+                "ssl.keystore.certificate.chain=${strimzisecrets:namespace/tls-keystore:pem-content}",
+                "ssl.keystore.key=${strimzisecrets:namespace/tls-keystore:null}",
+                "ssl.keystore.type=PEM",
+                "producer.ssl.keystore.certificate.chain=${strimzisecrets:namespace/tls-keystore:pem-content}",
+                "producer.ssl.keystore.key=${strimzisecrets:namespace/tls-keystore:null}",
+                "producer.ssl.keystore.type=PEM",
+                "consumer.ssl.keystore.certificate.chain=${strimzisecrets:namespace/tls-keystore:pem-content}",
+                "consumer.ssl.keystore.key=${strimzisecrets:namespace/tls-keystore:null}",
+                "consumer.ssl.keystore.type=PEM",
+                "admin.ssl.keystore.certificate.chain=${strimzisecrets:namespace/tls-keystore:pem-content}",
+                "admin.ssl.keystore.key=${strimzisecrets:namespace/tls-keystore:null}",
+                "admin.ssl.keystore.type=PEM"
+        ));
+    }
+
+    @Test
+    public void testWithPlainAndSaslMechanism() {
+        KafkaClientAuthenticationPlain authPlain = new KafkaClientAuthenticationPlainBuilder()
+                .withUsername("user1")
+                .withNewPasswordSecret()
+                    .withSecretName("my-auth-secret")
+                    .withPassword("my-password-key")
+                .endPasswordSecret()
+                .build();
+
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withAuthentication(authPlain)
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "security.protocol=SASL_PLAINTEXT",
+                "producer.security.protocol=SASL_PLAINTEXT",
+                "consumer.security.protocol=SASL_PLAINTEXT",
+                "admin.security.protocol=SASL_PLAINTEXT",
+                "sasl.mechanism=PLAIN",
+                "sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username=\"user1\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";",
+                "producer.sasl.mechanism=PLAIN",
+                "producer.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username=\"user1\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";",
+                "consumer.sasl.mechanism=PLAIN",
+                "consumer.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username=\"user1\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";",
+                "admin.sasl.mechanism=PLAIN",
+                "admin.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username=\"user1\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";"
+        ));
+    }
+
+    @Test
+    public void testWithTlsAndSaslMechanism() {
+        ClientTls clientTls = new ClientTlsBuilder()
+                .addNewTrustedCertificate()
+                    .withSecretName("tls-trusted-certificate")
+                    .withCertificate("pem-content")
+                .endTrustedCertificate()
+                .build();
+
+        KafkaClientAuthenticationPlain authPlain = new KafkaClientAuthenticationPlainBuilder()
+                .withUsername("user1")
+                .withNewPasswordSecret()
+                    .withSecretName("my-auth-secret")
+                    .withPassword("my-password-key")
+                .endPasswordSecret()
+                .build();
+
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withTls(clientTls, "my-cluster")
+                .withAuthentication(authPlain)
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "security.protocol=SASL_SSL",
+                "producer.security.protocol=SASL_SSL",
+                "consumer.security.protocol=SASL_SSL",
+                "admin.security.protocol=SASL_SSL",
+                "ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "ssl.truststore.type=PEM",
+                "producer.ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "producer.ssl.truststore.type=PEM",
+                "consumer.ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "consumer.ssl.truststore.type=PEM",
+                "admin.ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "admin.ssl.truststore.type=PEM",
+                "sasl.mechanism=PLAIN",
+                "sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username=\"user1\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";",
+                "producer.sasl.mechanism=PLAIN",
+                "producer.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username=\"user1\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";",
+                "consumer.sasl.mechanism=PLAIN",
+                "consumer.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username=\"user1\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";",
+                "admin.sasl.mechanism=PLAIN",
+                "admin.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username=\"user1\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";"
+        ));
+    }
+
+    @Test
+    public void testWithPlainAndScramSha256() {
+        KafkaClientAuthenticationScramSha256 authScramSha256 = new KafkaClientAuthenticationScramSha256Builder()
+                .withUsername("my-user")
+                .withNewPasswordSecret()
+                    .withSecretName("my-auth-secret")
+                    .withPassword("my-password-key")
+                .endPasswordSecret()
+                .build();
+
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withAuthentication(authScramSha256)
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "security.protocol=SASL_PLAINTEXT",
+                "producer.security.protocol=SASL_PLAINTEXT",
+                "consumer.security.protocol=SASL_PLAINTEXT",
+                "admin.security.protocol=SASL_PLAINTEXT",
+                "sasl.mechanism=SCRAM-SHA-256",
+                "sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username=\"my-user\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";",
+                "producer.sasl.mechanism=SCRAM-SHA-256",
+                "producer.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username=\"my-user\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";",
+                "consumer.sasl.mechanism=SCRAM-SHA-256",
+                "consumer.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username=\"my-user\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";",
+                "admin.sasl.mechanism=SCRAM-SHA-256",
+                "admin.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username=\"my-user\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";"
+        ));
+    }
+
+    @Test
+    public void testWithTlsAndScramSha256() {
+        ClientTls clientTls = new ClientTlsBuilder()
+                .addNewTrustedCertificate()
+                    .withSecretName("tls-trusted-certificate")
+                    .withCertificate("pem-content")
+                .endTrustedCertificate()
+                .build();
+
+        KafkaClientAuthenticationScramSha256 authScramSha256 = new KafkaClientAuthenticationScramSha256Builder()
+                .withUsername("my-user")
+                .withNewPasswordSecret()
+                    .withSecretName("my-auth-secret")
+                    .withPassword("my-password-key")
+                .endPasswordSecret()
+                .build();
+
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withTls(clientTls, "my-cluster")
+                .withAuthentication(authScramSha256)
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "security.protocol=SASL_SSL",
+                "producer.security.protocol=SASL_SSL",
+                "consumer.security.protocol=SASL_SSL",
+                "admin.security.protocol=SASL_SSL",
+                "ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "ssl.truststore.type=PEM",
+                "producer.ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "producer.ssl.truststore.type=PEM",
+                "consumer.ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "consumer.ssl.truststore.type=PEM",
+                "admin.ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "admin.ssl.truststore.type=PEM",
+                "sasl.mechanism=SCRAM-SHA-256",
+                "sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username=\"my-user\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";",
+                "producer.sasl.mechanism=SCRAM-SHA-256",
+                "producer.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username=\"my-user\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";",
+                "consumer.sasl.mechanism=SCRAM-SHA-256",
+                "consumer.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username=\"my-user\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";",
+                "admin.sasl.mechanism=SCRAM-SHA-256",
+                "admin.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username=\"my-user\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";"
+        ));
+    }
+
+    @Test
+    public void testWithPlainAndScramSha512() {
+        KafkaClientAuthenticationScramSha512 authScramSha512 = new KafkaClientAuthenticationScramSha512Builder()
+                .withUsername("my-user")
+                .withNewPasswordSecret()
+                    .withSecretName("my-auth-secret")
+                    .withPassword("my-password-key")
+                .endPasswordSecret()
+                .build();
+
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withAuthentication(authScramSha512)
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "security.protocol=SASL_PLAINTEXT",
+                "producer.security.protocol=SASL_PLAINTEXT",
+                "consumer.security.protocol=SASL_PLAINTEXT",
+                "admin.security.protocol=SASL_PLAINTEXT",
+                "sasl.mechanism=SCRAM-SHA-512",
+                "sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username=\"my-user\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";",
+                "producer.sasl.mechanism=SCRAM-SHA-512",
+                "producer.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username=\"my-user\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";",
+                "consumer.sasl.mechanism=SCRAM-SHA-512",
+                "consumer.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username=\"my-user\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";",
+                "admin.sasl.mechanism=SCRAM-SHA-512",
+                "admin.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username=\"my-user\" password=\"${strimzisecrets:namespace/my-auth-secret:my-password-key}\";"
+        ));
+    }
+
+    @Test
+    public void testWithTlsAndCustomAuthMechanismWithSASL() {
+        ClientTls clientTls = new ClientTlsBuilder()
+                .addNewTrustedCertificate()
+                    .withSecretName("tls-trusted-certificate")
+                    .withCertificate("pem-content")
+                .endTrustedCertificate()
+                .build();
+
+        KafkaClientAuthenticationCustom authCustom = new KafkaClientAuthenticationCustomBuilder()
+                .withSasl()
+                .withConfig(Map.of("sasl.mechanism", "AWS_MSK_IAM", "sasl.jaas.config", "software.amazon.msk.auth.iam.IAMLoginModule required;", "sasl.client.callback.handler.class", "software.amazon.msk.auth.iam.IAMClientCallbackHandler", "not.allowed", "foo"))
+                .build();
+
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withTls(clientTls, "my-cluster")
+                .withAuthentication(authCustom)
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "security.protocol=SASL_SSL",
+                "producer.security.protocol=SASL_SSL",
+                "consumer.security.protocol=SASL_SSL",
+                "admin.security.protocol=SASL_SSL",
+                "ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "ssl.truststore.type=PEM",
+                "producer.ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "producer.ssl.truststore.type=PEM",
+                "consumer.ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "consumer.ssl.truststore.type=PEM",
+                "admin.ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "admin.ssl.truststore.type=PEM",
+                "sasl.mechanism=AWS_MSK_IAM",
+                "sasl.jaas.config=software.amazon.msk.auth.iam.IAMLoginModule required;",
+                "sasl.client.callback.handler.class=software.amazon.msk.auth.iam.IAMClientCallbackHandler",
+                "producer.sasl.mechanism=AWS_MSK_IAM",
+                "producer.sasl.jaas.config=software.amazon.msk.auth.iam.IAMLoginModule required;",
+                "producer.sasl.client.callback.handler.class=software.amazon.msk.auth.iam.IAMClientCallbackHandler",
+                "consumer.sasl.mechanism=AWS_MSK_IAM",
+                "consumer.sasl.jaas.config=software.amazon.msk.auth.iam.IAMLoginModule required;",
+                "consumer.sasl.client.callback.handler.class=software.amazon.msk.auth.iam.IAMClientCallbackHandler",
+                "admin.sasl.mechanism=AWS_MSK_IAM",
+                "admin.sasl.jaas.config=software.amazon.msk.auth.iam.IAMLoginModule required;",
+                "admin.sasl.client.callback.handler.class=software.amazon.msk.auth.iam.IAMClientCallbackHandler"
+        ));
+    }
+
+    @Test
+    public void testWithTlsAndCustomAuthMechanismWithoutSASL() {
+        ClientTls clientTls = new ClientTlsBuilder()
+                .addNewTrustedCertificate()
+                    .withSecretName("tls-trusted-certificate")
+                    .withCertificate("pem-content")
+                .endTrustedCertificate()
+                .build();
+
+        KafkaClientAuthenticationCustom authCustom = new KafkaClientAuthenticationCustomBuilder()
+                .withSasl(false)
+                .withConfig(Map.of("ssl.keystore.location", "/mnt/certs/keystore", "ssl.keystore.password", "changeme", "not.allowed", "foo"))
+                .build();
+
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withTls(clientTls, "my-cluster")
+                .withAuthentication(authCustom)
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "security.protocol=SSL",
+                "producer.security.protocol=SSL",
+                "consumer.security.protocol=SSL",
+                "admin.security.protocol=SSL",
+                "ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "ssl.truststore.type=PEM",
+                "producer.ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "producer.ssl.truststore.type=PEM",
+                "consumer.ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "consumer.ssl.truststore.type=PEM",
+                "admin.ssl.truststore.certificates=${strimzisecrets:namespace/my-cluster-connect-tls-trusted-certs:ca.crt}",
+                "admin.ssl.truststore.type=PEM",
+                "ssl.keystore.location=/mnt/certs/keystore",
+                "ssl.keystore.password=changeme",
+                "producer.ssl.keystore.location=/mnt/certs/keystore",
+                "producer.ssl.keystore.password=changeme",
+                "consumer.ssl.keystore.location=/mnt/certs/keystore",
+                "consumer.ssl.keystore.password=changeme",
+                "admin.ssl.keystore.location=/mnt/certs/keystore",
+                "admin.ssl.keystore.password=changeme"
+        ));
+    }
+
+    @Test
+    public void testWithTopologyLabelRackId() {
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withRackId(new TopologyLabelRackBuilder().withTopologyKey("rack-label").build())
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "security.protocol=PLAINTEXT",
+                "producer.security.protocol=PLAINTEXT",
+                "consumer.security.protocol=PLAINTEXT",
+                "admin.security.protocol=PLAINTEXT",
+                "consumer.client.rack=${strimzidir:/opt/kafka/init:rack.id}"
+        ));
+    }
+
+    @Test
+    public void testWithEnvironmentVariableRackId() {
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withRackId(new EnvironmentVariableRackBuilder().withEnvVarName("MY_RACK_ID").build())
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "security.protocol=PLAINTEXT",
+                "producer.security.protocol=PLAINTEXT",
+                "consumer.security.protocol=PLAINTEXT",
+                "admin.security.protocol=PLAINTEXT",
+                "consumer.client.rack=${strimzienv:MY_RACK_ID}"
+        ));
+    }
+
+    @Test
+    public void testWithConfigProviders() {
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withUserConfiguration(null, false, false)
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "security.protocol=PLAINTEXT",
+                "producer.security.protocol=PLAINTEXT",
+                "consumer.security.protocol=PLAINTEXT",
+                "admin.security.protocol=PLAINTEXT",
+                "config.providers=strimzienv,strimzifile,strimzidir,strimzisecrets",
+                "config.providers.strimzienv.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider",
+                "config.providers.strimzienv.param.allowlist.pattern=.*",
+                "config.providers.strimzifile.class=org.apache.kafka.common.config.provider.FileConfigProvider",
+                "config.providers.strimzidir.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider",
+                "config.providers.strimzidir.param.allowed.paths=/opt/kafka",
+                "config.providers.strimzisecrets.class=io.strimzi.kafka.KubernetesSecretConfigProvider",
+                "key.converter=org.apache.kafka.connect.json.JsonConverter",
+                "value.converter=org.apache.kafka.connect.json.JsonConverter")
+        );
+    }
+
+    @Test
+    public void testWithUserProvidedAndDefaultConfigurations() {
+        Map<String, Object> userConfiguration = new HashMap<>();
+        userConfiguration.put("myconfig", "abc");
+        userConfiguration.put("myconfig2", 123);
+        KafkaConnectConfiguration configurations = new KafkaConnectConfiguration(Reconciliation.DUMMY_RECONCILIATION, userConfiguration.entrySet());
+
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withUserConfiguration(configurations, false, false)
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "security.protocol=PLAINTEXT",
+                "producer.security.protocol=PLAINTEXT",
+                "consumer.security.protocol=PLAINTEXT",
+                "admin.security.protocol=PLAINTEXT",
+                "config.providers=strimzienv,strimzifile,strimzidir,strimzisecrets",
+                "config.providers.strimzienv.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider",
+                "config.providers.strimzienv.param.allowlist.pattern=.*",
+                "config.providers.strimzifile.class=org.apache.kafka.common.config.provider.FileConfigProvider",
+                "config.providers.strimzidir.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider",
+                "config.providers.strimzisecrets.class=io.strimzi.kafka.KubernetesSecretConfigProvider",
+                "config.providers.strimzidir.param.allowed.paths=/opt/kafka",
+                "myconfig=abc",
+                "myconfig2=123",
+                "key.converter=org.apache.kafka.connect.json.JsonConverter",
+                "value.converter=org.apache.kafka.connect.json.JsonConverter")
+        );
+    }
+
+    @Test
+    public void testWithUserProvidedConfigMaps() {
+        Map<String, Object> userConfiguration = new HashMap<>();
+        userConfiguration.put("config.providers", "userenv");
+        userConfiguration.put("config.providers.userenv.class", "org.apache.kafka.common.config.provider.EnvVarConfigProvider");
+        KafkaConnectConfiguration configurations = new KafkaConnectConfiguration(Reconciliation.DUMMY_RECONCILIATION, userConfiguration.entrySet());
+
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withUserConfiguration(configurations, false, false)
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "security.protocol=PLAINTEXT",
+                "producer.security.protocol=PLAINTEXT",
+                "consumer.security.protocol=PLAINTEXT",
+                "admin.security.protocol=PLAINTEXT",
+                "config.providers=userenv,strimzienv,strimzifile,strimzidir,strimzisecrets",
+                "config.providers.strimzienv.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider",
+                "config.providers.strimzienv.param.allowlist.pattern=.*",
+                "config.providers.strimzifile.class=org.apache.kafka.common.config.provider.FileConfigProvider",
+                "config.providers.strimzidir.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider",
+                "config.providers.strimzidir.param.allowed.paths=/opt/kafka",
+                "config.providers.userenv.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider",
+                "config.providers.strimzisecrets.class=io.strimzi.kafka.KubernetesSecretConfigProvider",
+                "key.converter=org.apache.kafka.connect.json.JsonConverter",
+                "value.converter=org.apache.kafka.connect.json.JsonConverter")
+        );
+    }
+
+    @Test
+    public void testWithRestListeners() {
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withRestListeners(8083)
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "security.protocol=PLAINTEXT",
+                "producer.security.protocol=PLAINTEXT",
+                "consumer.security.protocol=PLAINTEXT",
+                "admin.security.protocol=PLAINTEXT",
+                "rest.advertised.host.name=${strimzienv:ADVERTISED_HOSTNAME}",
+                "rest.advertised.port=8083"
+        ));
+    }
+
+    @Test
+    public void withPluginPath() {
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withPluginPath().build();
+
+        assertThat(configuration, isEquivalent(
+                "bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "security.protocol=PLAINTEXT",
+                "producer.security.protocol=PLAINTEXT",
+                "consumer.security.protocol=PLAINTEXT",
+                "admin.security.protocol=PLAINTEXT",
+                "plugin.path=/opt/kafka/plugins"
+        ));
+    }
+
+    @Test
+    public void testStrimziMetricsReporterEnabled() {
+        StrimziMetricsReporterModel model = new StrimziMetricsReporterModel(
+                new KafkaConnectSpecBuilder()
+                .withMetricsConfig(new StrimziMetricsReporterBuilder()
+                    .withNewValues()
+                        .withAllowList("kafka_connect_connector_metrics.*", "kafka_connect_connector_task_metrics.*")
+                    .endValues()
+                    .build())
+                .build(), List.of(".*"));
+
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withStrimziMetricsReporter(model)
+                .build();
+
+        assertThat(configuration, isEquivalent(
+                "admin.security.protocol=PLAINTEXT",
+                "bootstrap.servers=my-cluster-kafka-bootstrap:9092",
+                "security.protocol=PLAINTEXT",
+                "producer.security.protocol=PLAINTEXT",
+                "consumer.security.protocol=PLAINTEXT",
+                StrimziMetricsReporterConfig.LISTENER_ENABLE + "=true",
+                StrimziMetricsReporterConfig.LISTENER + "=http://:" + MetricsModel.METRICS_PORT,
+                StrimziMetricsReporterConfig.ALLOW_LIST + "=kafka_connect_connector_metrics.*,kafka_connect_connector_task_metrics.*",
+                "admin." + StrimziMetricsReporterConfig.LISTENER_ENABLE + "=true",
+                "admin." + StrimziMetricsReporterConfig.LISTENER + "=http://:" + MetricsModel.METRICS_PORT,
+                "admin." + StrimziMetricsReporterConfig.ALLOW_LIST + "=kafka_connect_connector_metrics.*,kafka_connect_connector_task_metrics.*",
+                "producer." + StrimziMetricsReporterConfig.LISTENER_ENABLE + "=true",
+                "producer." + StrimziMetricsReporterConfig.LISTENER + "=http://:" + MetricsModel.METRICS_PORT,
+                "producer." + StrimziMetricsReporterConfig.ALLOW_LIST + "=kafka_connect_connector_metrics.*,kafka_connect_connector_task_metrics.*",
+                "consumer." + StrimziMetricsReporterConfig.LISTENER_ENABLE + "=true",
+                "consumer." + StrimziMetricsReporterConfig.LISTENER + "=http://:" + MetricsModel.METRICS_PORT,
+                "consumer." + StrimziMetricsReporterConfig.ALLOW_LIST + "=kafka_connect_connector_metrics.*,kafka_connect_connector_task_metrics.*"
+        ));
+    }
+
+    static Stream<Arguments> sourceUserConfigWithMetricsReporters() {
+        Map<String, Object> configMap = new HashMap<>();
+        configMap.put("metric.reporters", "my.domain.CustomMetricReporter");
+
+        KafkaConnectConfiguration userConfig = new KafkaConnectConfiguration(Reconciliation.DUMMY_RECONCILIATION, configMap.entrySet());
+        String expectedConfig = "admin.security.protocol=PLAINTEXT\n"
+                + "bootstrap.servers=my-cluster-kafka-bootstrap:9092\n"
+                + "consumer.security.protocol=PLAINTEXT\n"
+                + "config.providers.strimzidir.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider\n"
+                + "config.providers.strimzidir.param.allowed.paths=/opt/kafka\n"
+                + "config.providers.strimzienv.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider\n"
+                + "config.providers.strimzienv.param.allowlist.pattern=.*\n"
+                + "config.providers.strimzifile.class=org.apache.kafka.common.config.provider.FileConfigProvider\n"
+                + "config.providers=strimzienv,strimzifile,strimzidir,strimzisecrets\n"
+                + "config.providers.strimzisecrets.class=io.strimzi.kafka.KubernetesSecretConfigProvider\n"
+                + "key.converter=org.apache.kafka.connect.json.JsonConverter\n"
+                + "producer.security.protocol=PLAINTEXT\n"
+                + "security.protocol=PLAINTEXT\n"
+                + "value.converter=org.apache.kafka.connect.json.JsonConverter\n";
+
+        // testing 4 combinations of 2 boolean values
+        return Stream.of(
+                Arguments.of(userConfig, false, false, expectedConfig
+                        + "metric.reporters=my.domain.CustomMetricReporter"),
+
+                Arguments.of(userConfig, true, false, expectedConfig
+                        + "metric.reporters=my.domain.CustomMetricReporter,org.apache.kafka.common.metrics.JmxReporter\n"
+                        + "admin.metric.reporters=org.apache.kafka.common.metrics.JmxReporter\n"
+                        + "producer.metric.reporters=org.apache.kafka.common.metrics.JmxReporter\n"
+                        + "consumer.metric.reporters=org.apache.kafka.common.metrics.JmxReporter"),
+
+                Arguments.of(userConfig, false, true, expectedConfig
+                        + "metric.reporters=my.domain.CustomMetricReporter," + StrimziMetricsReporterConfig.CLIENT_CLASS + "\n"
+                        + "admin.metric.reporters=" + StrimziMetricsReporterConfig.CLIENT_CLASS + "\n"
+                        + "producer.metric.reporters=" + StrimziMetricsReporterConfig.CLIENT_CLASS + "\n"
+                        + "consumer.metric.reporters=" + StrimziMetricsReporterConfig.CLIENT_CLASS + "\n"),
+
+                Arguments.of(userConfig, true, true, expectedConfig
+                        + "metric.reporters=my.domain.CustomMetricReporter,org.apache.kafka.common.metrics.JmxReporter," + StrimziMetricsReporterConfig.CLIENT_CLASS + "\n"
+                        + "admin.metric.reporters=org.apache.kafka.common.metrics.JmxReporter," + StrimziMetricsReporterConfig.CLIENT_CLASS + "\n"
+                        + "producer.metric.reporters=org.apache.kafka.common.metrics.JmxReporter," + StrimziMetricsReporterConfig.CLIENT_CLASS + "\n"
+                        + "consumer.metric.reporters=org.apache.kafka.common.metrics.JmxReporter," + StrimziMetricsReporterConfig.CLIENT_CLASS + "\n")
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("sourceUserConfigWithMetricsReporters")
+    public void testUserConfigurationWithMetricReporters(
+            KafkaConnectConfiguration userConfig,
+            boolean injectJmx,
+            boolean injectStrimzi,
+            String expectedConfig) {
+        String actualConfig = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withUserConfiguration(userConfig, injectJmx, injectStrimzi)
+                .build();
+        assertThat(actualConfig, isEquivalent(expectedConfig));
+    }
+
+    @Test
+    public void testStrimziMetricsReporterViaUserAndMetricsConfigs() {
+        Map<String, Object> configMap = new HashMap<>();
+        configMap.put("metric.reporters", StrimziMetricsReporterConfig.CLIENT_CLASS);
+        KafkaConfiguration userConfig = new KafkaConfiguration(Reconciliation.DUMMY_RECONCILIATION, configMap.entrySet());
+        
+        StrimziMetricsReporterModel model = new StrimziMetricsReporterModel(
+                new KafkaConnectSpecBuilder()
+                .withMetricsConfig(new StrimziMetricsReporterBuilder()
+                    .withNewValues()
+                        .withAllowList("kafka_connect_connector_metrics.*", "kafka_connect_connector_task_metrics.*")
+                    .endValues()
+                    .build())
+                .build(), List.of(".*"));
+
+        String configuration = new KafkaConnectConfigurationBuilder(Reconciliation.DUMMY_RECONCILIATION, BOOTSTRAP_SERVERS)
+                .withUserConfiguration(userConfig, false, true)
+                .withStrimziMetricsReporter(model)
+                .build();
+
+        assertThat(configuration, isEquivalent("bootstrap.servers=my-cluster-kafka-bootstrap:9092\n"
+                + "config.providers=strimzienv,strimzifile,strimzidir,strimzisecrets\n"
+                + "config.providers.strimzienv.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider\n"
+                + "config.providers.strimzienv.param.allowlist.pattern=.*\n"
+                + "config.providers.strimzifile.class=org.apache.kafka.common.config.provider.FileConfigProvider\n"
+                + "config.providers.strimzidir.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider\n"
+                + "config.providers.strimzidir.param.allowed.paths=/opt/kafka\n"
+                + "config.providers.strimzisecrets.class=io.strimzi.kafka.KubernetesSecretConfigProvider\n"
+                + "admin.metric.reporters=io.strimzi.kafka.metrics.prometheus.ClientMetricsReporter\n"
+                + "producer.metric.reporters=io.strimzi.kafka.metrics.prometheus.ClientMetricsReporter\n"
+                + "consumer.metric.reporters=io.strimzi.kafka.metrics.prometheus.ClientMetricsReporter\n"
+                + "value.converter=org.apache.kafka.connect.json.JsonConverter\n"
+                + "key.converter=org.apache.kafka.connect.json.JsonConverter\n"
+                + StrimziMetricsReporterConfig.LISTENER_ENABLE + "=true\n"
+                + StrimziMetricsReporterConfig.LISTENER + "=http://:" + MetricsModel.METRICS_PORT + "\n"
+                + StrimziMetricsReporterConfig.ALLOW_LIST + "=kafka_connect_connector_metrics.*,kafka_connect_connector_task_metrics.*\n"
+                + "admin." + StrimziMetricsReporterConfig.LISTENER_ENABLE + "=true\n"
+                + "admin." + StrimziMetricsReporterConfig.LISTENER + "=http://:" + MetricsModel.METRICS_PORT + "\n"
+                + "admin." + StrimziMetricsReporterConfig.ALLOW_LIST + "=kafka_connect_connector_metrics.*,kafka_connect_connector_task_metrics.*\n"
+                + "producer." + StrimziMetricsReporterConfig.LISTENER_ENABLE + "=true\n"
+                + "producer." + StrimziMetricsReporterConfig.LISTENER + "=http://:" + MetricsModel.METRICS_PORT + "\n"
+                + "producer." + StrimziMetricsReporterConfig.ALLOW_LIST + "=kafka_connect_connector_metrics.*,kafka_connect_connector_task_metrics.*\n"
+                + "consumer." + StrimziMetricsReporterConfig.LISTENER_ENABLE + "=true\n"
+                + "consumer." + StrimziMetricsReporterConfig.LISTENER + "=http://:" + MetricsModel.METRICS_PORT + "\n"
+                + "consumer." + StrimziMetricsReporterConfig.ALLOW_LIST + "=kafka_connect_connector_metrics.*,kafka_connect_connector_task_metrics.*\n"
+                + "security.protocol=PLAINTEXT\n"
+                + "producer.security.protocol=PLAINTEXT\n"
+                + "consumer.security.protocol=PLAINTEXT\n"
+                + "admin.security.protocol=PLAINTEXT\n"
+                + "metric.reporters=" + StrimziMetricsReporterConfig.CLIENT_CLASS));
+    }
+}

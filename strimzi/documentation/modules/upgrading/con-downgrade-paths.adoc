@@ -1,0 +1,48 @@
+:_mod-docs-content-type: CONCEPT
+
+// This assembly is included in the following assemblies:
+//
+// assembly-upgrade.adoc
+
+[id='con-downgrade-paths-{context}']
+= Strimzi downgrade paths
+
+[role="_abstract"]
+Two downgrade paths are available for Strimzi.
+
+Incremental downgrade::
+An incremental downgrade moves between consecutive minor versions (such as {ProductVersion} to {ProductVersionPrevious}), following a supported downgrade path.
+
+Multi-version downgrade::
+A multi-version downgrade skips one or more minor versions. 
+It may result in errors due to configuration changes or incompatible Kafka versions. 
+See <<downgrade-version-limitations>> for details on specific paths.
+
+Before downgrading in production, test your specific scenario in a controlled environment to identify potential issues.
+
+[id='con-downgrade-paths-kafka-versions-{context}']
+== Support for Kafka versions when downgrading
+
+When downgrading Strimzi, it is important to ensure compatibility with the Kafka version being used.
+
+Multi-version downgrades are possible even if the supported Kafka versions differ between the old and new versions. 
+However, if you attempt to downgrade to an older Strimzi version that does not support the current Kafka version, xref:con-downgrade-cluster-operator-unsupported-kafka-str[an error indicating that the Kafka version is not supported is generated]. 
+In this case, you must, if possible, downgrade the Kafka version as part of the Strimzi downgrade by changing the `spec.kafka.version` in the `Kafka` custom resource to the supported version for the target Strimzi version. If it is not possible to downgrade the Kafka version (for example in Strimzi version 0.45.0 or earlier), then the Strimzi downgrade path you are attempting is not supported. 
+
+The following table details known limitations for specific downgrade paths.
+
+.Known limitations in downgrade paths
+[[downgrade-version-limitations]]
+[cols="2,5",options="header"]
+|===
+
+| Target Strimzi Version
+| Limitation
+
+| \<= 0.45.0
+| The current Kafka version must be supported by the target Strimzi version.
+
+It is only possible to downgrade from unsupported Kafka versions in Strimzi version 0.46.0 and higher.
+
+|===
+

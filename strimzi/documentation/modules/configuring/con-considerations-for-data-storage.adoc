@@ -1,0 +1,49 @@
+:_mod-docs-content-type: CONCEPT
+
+// Module included in the following assemblies:
+//
+// assembly-storage.adoc
+
+[id='considerations-for-data-storage-{context}']
+= Storage considerations
+
+[role="_abstract"]
+Efficient data storage is essential for Strimzi to operate effectively. 
+Strimzi has been tested with block storage as the primary storage type for Kafka brokers, and block storage is strongly recommended. 
+File system-based storage (such as NFS) is not guaranteed to work for primary broker storage and may cause stability or performance issues. 
+
+Common block storage types supported by Kubernetes include:
+
+* Cloud-based block storage solutions:
+** Amazon EBS (for AWS)
+** Azure Disk Storage (for Microsoft Azure)
+** Persistent Disk (for Google Cloud)
+* Persistent storage (for bare metal deployments) using {K8sLocalPersistentVolumes}
+* Storage Area Network (SAN) volumes accessed by protocols like Fibre Channel or iSCSI
+
+NOTE: Strimzi does not require Kubernetes raw block volumes.
+
+== File systems
+
+Kafka uses a file system for storing messages.
+Strimzi is compatible with the XFS and ext4 file systems, which are commonly used with Kafka.
+Consider the underlying architecture and requirements of your deployment when choosing and setting up your file system.
+
+For more information, see the link:{ApacheKafkaDocsBase}operations/hardware-and-os/#filesystem-selection[Apache Kafka filesystem selection documentation^].
+
+== Tiered storage
+
+Kafka’s tiered storage feature is supported in Strimzi as an optional capability. 
+
+With tiered storage enabled:
+
+* Primary broker storage,such as persistent volumes or JBOD, handles recent data
+* Remote tiered storage, such as object storage, is used for historical data
+
+Strimzi allows users to integrate their own tiered storage plugins to support specific remote storage backends.
+If using a custom plugin, ensure that it meets performance and compatibility requirements before deploying to production.
+
+== Disk usage
+Solid-state drives (SSDs), though not essential, can improve the performance of Kafka in large clusters where data is sent to and received from multiple topics asynchronously.
+
+NOTE: Replicated storage is not required, as Kafka provides built-in data replication.

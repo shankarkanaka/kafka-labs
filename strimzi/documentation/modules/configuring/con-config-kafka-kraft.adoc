@@ -1,0 +1,94 @@
+:_mod-docs-content-type: CONCEPT
+
+// Module included in the following assemblies:
+//
+// assembly-config.adoc
+
+[id='con-config-kafka-kraft-{context}']
+= Configuring Kafka
+
+[role="_abstract"]
+Configure your Kafka deployment by updating the `spec` properties of the `Kafka` custom resource.
+
+Start with a minimal configuration that defines the core requirements for running a Kafka cluster.
+Extend it with optional settings to support the following:
+
+* Securing client connections using TLS and authentication
+* Configuring authorization
+* Configuring broker behavior for durability and availability
+* Capturing consumer lag metrics using Kafka Exporter
+* Kafka cluster balancing and resource distribution using Cruise Control
+* Controlling throughput and storage usage using quotas
+* Recovering from broker storage issues
+* Using node pools to define broker groups
+* xref:con-common-config-{context}[Common configuration], including setting resource limits and requests (recommended), JVM tuning, and metrics
+* xref:assembly-logging-configuration-{context}[Logging configuration]
+
+Certain settings, though optional, are recommended for production deployments.
+These include security, resource allocation, and broker replication settings.
+
+For details of all available properties, see the link:{BookURLConfiguring}[Strimzi Custom Resource API Reference^].
+
+NOTE: Kafka clusters use node pools.
+At least one `KafkaNodePool` resource is required.
+Node pools can define controller and broker roles separately or in combination.
+Using separate node pools is recommended for most production deployments.
+For details, see xref:config-node-pools-{context}[Configuring node pools].
+
+== Minimal configuration for a Kafka cluster
+
+A Kafka cluster requires a `Kafka` resource and at least one `KafkaNodePool` resource.
+The `Kafka` resource defines cluster-wide configuration such as listeners and broker settings.
+
+.Minimal configuration for Kafka
+[source,yaml,subs="+attributes"]
+----
+# Basic configuration (required)
+apiVersion: {KafkaApiVersion}
+kind: Kafka
+metadata:
+  name: my-cluster
+# Deployment specifications
+spec:
+  kafka:
+    # Broker configuration for replication (recommended)
+    config:
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+      transaction.state.log.min.isr: 2
+      default.replication.factor: 3
+      min.insync.replicas: 2
+    # Listener configuration (required)
+    listeners:
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+      - name: tls
+        port: 9093
+        type: internal
+        tls: true
+    # Kafka version (recommended)
+    version: {DefaultKafkaVersion}
+    # KRaft metadata version (recommended)
+    metadataVersion: {DefaultKafkaMetadataVersion}
+  # Entity Operator (recommended)
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}
+----
+
+* `spec.kafka.config` defines broker-level configuration.
+In this example, replication and ISR settings are configured to provide durable replication for internal topics.
+* `spec.kafka.listeners` defines how clients connect to the Kafka cluster.
+At least one listener is required.
+* `spec.kafka.version` specifies the Kafka version for the cluster.
+Change this value only by following the xref:proc-upgrade-kafka-kraft-str[Kafka upgrade procedure].
+* `spec.kafka.metadataVersion` specifies the metadata version for KRaft-based clusters.
+The value must be compatible with the Kafka version.
+* `spec.entityOperator` deploys the Topic Operator and User Operator using default settings.
+For more information, see xref:ref-kafka-entity-operator-{context}[Configuring the Entity Operator].
+
+WARNING: If you remove the `min.insync.replicas` property from `spec.kafka.config`,
+the Cluster Operator forces Kafka to fall back to the default value of `1`.
+To ensure durability, explicitly set `min.insync.replicas` to a value greater than `1`.

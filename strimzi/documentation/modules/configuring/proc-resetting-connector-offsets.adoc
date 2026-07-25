@@ -1,0 +1,85 @@
+:_mod-docs-content-type: PROCEDURE
+
+// Module included in the following assemblies:
+//
+// assembly-config.adoc
+
+[id='proc-resetting-connector-offsets-{context}']
+= Resetting Kafka Connect connector offsets
+
+[role="_abstract"]
+Resetting connector offsets clears the stored offset state so that Kafka Connect determines offsets again when the connector is restarted.
+
+To reset offsets using `KafkaConnector` resources, stop the connector and annotate the resource to clear the offsets.
+After the reset is applied, restart the connector.
+
+In this procedure, offsets are reset for a source connector named `my-source-connector`.
+
+.Prerequisites
+
+* The Cluster Operator is running.
+
+.Procedure
+
+. Edit the `KafkaConnector` resource to stop the connector.
++
+Example configuration to stop a connector:
++
+[source,yaml,subs="+attributes"]
+----
+apiVersion: {KafkaConnectorApiVersion}
+kind: KafkaConnector
+metadata:
+  name: my-source-connector
+  labels:
+    strimzi.io/cluster: my-connect-cluster
+spec:
+  state: stopped
+  # ...
+----
+* `spec.state: stopped` stops the connector before resetting offsets.
+
+. Reset the offsets by adding the annotation to the `KafkaConnector` resource:
++
+[source,shell]
+----
+kubectl annotate kafkaconnector my-source-connector strimzi.io/connector-offsets=reset -n <namespace>
+----
++
+The annotation remains until the reset operation succeeds or is manually removed.
+
+. Verify the reset by xref:proc-listing-connector-offsets-{context}[listing connector offsets].
++
+After the reset, the `offsets.json` property is empty.
++
+Example source connector offset list after reset:
++
+[source,yaml,subs="+attributes"]
+----
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  # ...
+data:
+  offsets.json: |-
+    {
+      "offsets": []
+    }
+----
+
+. Restart the connector by setting its state to `running`.
++
+Example configuration to restart the connector:
++
+[source,yaml,subs="+attributes"]
+----
+apiVersion: {KafkaConnectorApiVersion}
+kind: KafkaConnector
+metadata:
+  name: my-source-connector
+  labels:
+    strimzi.io/cluster: my-connect-cluster
+spec:
+  state: running
+  # ...
+----

@@ -1,0 +1,218 @@
+:_mod-docs-content-type: PROCEDURE
+
+// Module included in the following assemblies:
+//
+// deploying/assembly_deploy-standalone-operators.adoc
+
+[id='deploying-the-topic-operator-standalone-{context}']
+= Deploying the standalone Topic Operator
+
+[role="_abstract"]
+This procedure shows how to deploy the Topic Operator as a standalone component for topic management.
+You can use a standalone Topic Operator with a Kafka cluster that is not managed by the Cluster Operator.
+
+Standalone deployment files are provided with Strimzi.
+Use the `05-Deployment-strimzi-topic-operator.yaml` deployment file to deploy the Topic Operator.
+Add or set the environment variables needed to make a connection to a Kafka cluster.
+
+The Topic Operator watches for `KafkaTopic` resources in a single namespace.
+You specify the namespace to watch, and the connection to the Kafka cluster, in the Topic Operator configuration.
+A single Topic Operator can watch a single namespace. 
+One namespace should be watched by only one Topic Operator.
+If you want to use more than one Topic Operator, configure each of them to watch different namespaces.
+In this way, you can use Topic Operators with multiple Kafka clusters.  
+
+WARNING: Do not deploy more than one Kafka cluster into the same namespace. 
+This causes the Topic Operator connected to each cluster to compete for the same topic resources using the same names, leading to name collisions and unpredictable behavior.
+
+.Prerequisites
+
+* The standalone Topic Operator deployment files, which are included in the Strimzi xref:downloads-{context}[deployment files].
+* You are running a Kafka cluster for the Topic Operator to connect to.
++
+As long as the standalone Topic Operator is correctly configured for connection,
+the Kafka cluster can be running on a bare-metal environment, a virtual machine, or as a managed cloud application service.
+
+.Procedure
+
+. Edit the `env` properties in the `install/topic-operator/05-Deployment-strimzi-topic-operator.yaml` standalone deployment file.
++
+.Example standalone Topic Operator deployment configuration
+[source,shell,subs=+quotes]
+----
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: strimzi-topic-operator
+  labels:
+    app: strimzi
+spec:
+  # ...
+  template:
+    # ...
+    spec:
+      # ...
+      containers:
+        - name: strimzi-topic-operator
+          # ...
+          env:
+            - name: STRIMZI_NAMESPACE # <1>
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: STRIMZI_KAFKA_BOOTSTRAP_SERVERS # <2>
+              value: my-kafka-bootstrap-address:9092
+            - name: STRIMZI_RESOURCE_LABELS # <3>
+              value: "strimzi.io/cluster=my-cluster"
+            - name: STRIMZI_FULL_RECONCILIATION_INTERVAL_MS # <4>
+              value: "120000"
+            - name: STRIMZI_LOG_LEVEL # <5>
+              value: INFO
+            - name: STRIMZI_JAVA_OPTS # <6>
+              value: "-Xmx=512M -Xms=256M"
+            - name: STRIMZI_JAVA_SYSTEM_PROPERTIES # <7>
+              value: "-Djavax.net.debug=verbose -DpropertyName=value"
+            - name: STRIMZI_SASL_ENABLED # <8>
+              value: "false"
+            - name: STRIMZI_SASL_USERNAME # <9>
+              value: "admin"
+            - name: STRIMZI_SASL_PASSWORD # <10>
+              value: "password"
+            - name: STRIMZI_SASL_MECHANISM # <11>
+              value: "scram-sha-512"
+            - name: STRIMZI_SECURITY_PROTOCOL # <12>
+              value: "SSL"
+            - name: STRIMZI_USE_FINALIZERS # <13>
+              value: "false"
+----
+<1> The Kubernetes namespace for the Topic Operator to watch for `KafkaTopic` resources. Specify the namespace of the Kafka cluster.
+<2> The host and port pair of the bootstrap broker address to discover and connect to all brokers in the Kafka cluster.
+Use a comma-separated list to specify two or three broker addresses in case a server is down.
+<3> The label to identify the `KafkaTopic` resources managed by the Topic Operator.
+This does not have to be the name of the Kafka cluster.
+It can be the label assigned to the `KafkaTopic` resource.
+If you deploy more than one Topic Operator, the labels must be unique for each.
+That is, the operators cannot manage the same resources.
+<4> The interval between periodic reconciliations, in milliseconds.
+The default is `120000` (2 minutes).
+<5> The level for printing logging messages.
+You can set the level to `ERROR`, `WARNING`, `INFO`, `DEBUG`, or `TRACE`.
+<6> (Optional) The Java options used by the JVM running the Topic Operator.
+<7> (Optional) The debugging (`-D`) options set for the Topic Operator.
+<8> (Optional) Enables SASL support for client authentication when connecting to Kafka brokers.
+The default is `false`.
+<9> (Optional) The SASL username for client authentication.
+Mandatory only if SASL is enabled through `STRIMZI_SASL_ENABLED`.
+<10> (Optional) The SASL password for client authentication.
+Mandatory only if SASL is enabled through `STRIMZI_SASL_ENABLED`.
+<11> (Optional) The SASL mechanism for client authentication.
+Mandatory only if SASL is enabled through `STRIMZI_SASL_ENABLED`.
+You can set the value to `plain`, `scram-sha-256`, or `scram-sha-512`.
+<12> (Optional) The security protocol used for communication with Kafka brokers.
+The default value is "PLAINTEXT".
+You can set the value to `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, or `SASL_SSL`.
+<13> Set `STRIMZI_USE_FINALIZERS` to `false` if you do not want to use finalizers to control xref:con-deleting-managed-topics-{context}[topic deletion].
+
+. If you want to connect to Kafka brokers that are using certificates from a public certificate authority, set `STRIMZI_SECURITY_PROTOCOL` to `SSL` or `SSL_SASL`. Use this property, for example, if you are using Amazon AWS MSK service.
+. To enable TLS encryption and mTLS authentication for connections to the Kafka cluster, specify the trusted CAs and the client certificate using the following environment variables:
++
+.Example mTLS configuration
+[source,shell,subs=+quotes]
+----
+# ....
+env:
+  - name: STRIMZI_TLS_TRUSTED_CERTS_SECRET_NAME # <1>
+    value: "kafka-ca"
+  - name: STRIMZI_TLS_SECRET_NAME # <2>
+    value: "topic-operator-user-tls"
+  - name: STRIMZI_TLS_KEY_NAME # <3>
+    value: "tls.key"
+  - name: STRIMZI_TLS_CERT_NAME # <4>
+    value: "tls.crt"
+  - name: STRIMZI_CLUSTER_NAMESPACE # <5>
+    value: "my-kafka-namespace"
+# ...
+----
+<1> The name of the `Secret` with the public keys of the Certificate Authorities used to sign the Kafka server certificates as `.crt` entries.
+<2> The name of the `Secret` with the private key and certificate for mTLS client authentication.
+<3> The key under which the mTLS private key is stored in the `Secret`.
+<4> The key under which the mTLS client certificate is stored in the `Secret`.
+<5> The Kubernetes namespace where the TLS Secrets are located.
+
+. If you need to configure custom SASL authentication, you can define the necessary authentication properties using the `STRIMZI_SASL_CUSTOM_CONFIG_JSON` environment variable for the standalone operator.
+For example, this configuration may be used for accessing a Kafka cluster in a cloud provider with a custom login module like the link:https://github.com/aws/aws-msk-iam-auth[Amazon MSK Library for AWS Identity and Access Management^] (`aws-msk_iam-auth`).
++
+The property `STRIMZI_ALTERABLE_TOPIC_CONFIG` defaults to `ALL`, allowing all `.spec.config` properties to be set in the `KafkaTopic` resource.
+If this setting is not suitable for a managed Kafka service, do as follows:
++
+--
+* If only a subset of properties is configurable, list them as comma-separated values.
+* If no  properties are to be configured, use `NONE`, which is equivalent to an empty property list.
+--
++
+NOTE:  Only Kafka configuration properties starting with `sasl.` can be set with the `STRIMZI_SASL_CUSTOM_CONFIG_JSON` environment variable.
++
+.Example custom SASL configuration
+[source,shell,subs=+quotes]
+----
+# ....
+env:
+  - name: STRIMZI_SASL_ENABLED
+    value: "true"
+  - name: STRIMZI_SECURITY_PROTOCOL
+    value: SASL_SSL
+  - name: STRIMZI_SKIP_CLUSTER_CONFIG_REVIEW # <1>
+    value: "true"
+  - name: STRIMZI_ALTERABLE_TOPIC_CONFIG # <2>
+    value: compression.type, max.message.bytes, message.timestamp.difference.max.ms, message.timestamp.type, retention.bytes, retention.ms
+  - name: STRIMZI_SASL_CUSTOM_CONFIG_JSON # <3>
+    value: |
+      {
+        "sasl.mechanism": "AWS_MSK_IAM",
+        "sasl.jaas.config": "software.amazon.msk.auth.iam.IAMLoginModule required;",
+        "sasl.client.callback.handler.class": "software.amazon.msk.auth.iam.IAMClientCallbackHandler"
+      }
+  - name: STRIMZI_TRUSTSTORE_SECRET_NAME
+    value: kafka-ca
+  - name: STRIMZI_KAFKA_BOOTSTRAP_SERVERS
+    value: my-kafka-cluster-.kafka-serverless.us-east-1.amazonaws.com:9098
+# ...
+----
+<1> Disables cluster configuration lookup for managed Kafka services that don't allow topic configuration changes.
+<2> Defines the topic configuration properties that can be updated based on the limitations set by managed Kafka services.
+<3> Specifies the SASL properties to be set in JSON format. Only properties starting with `sasl.` are allowed.
++
+.Example Dockerfile with external jars
+[source,shell,subs="+quotes,attributes"]
+----
+FROM {DockerTopicOperator}
+
+USER root
+
+RUN mkdir -p ${STRIMZI_HOME}/external-libs
+RUN chmod +rx ${STRIMZI_HOME}/external-libs
+
+COPY ./aws-msk-iam-auth-and-dependencies/* ${STRIMZI_HOME}/external-libs/
+ENV JAVA_CLASSPATH=${STRIMZI_HOME}/external-libs/*
+
+USER 1001
+----
+
+. Apply the changes to the `Deployment` configuration to deploy the Topic Operator.
+
+. Check the status of the deployment:
++
+[source,shell,subs="+quotes"]
+----
+kubectl get deployments
+----
++
+.Output shows the deployment name and readiness
+[source,shell,subs="+quotes"]
+----
+NAME                    READY  UP-TO-DATE  AVAILABLE
+strimzi-topic-operator  1/1    1           1
+----
++
+`READY` shows the number of replicas that are ready/expected.
+The deployment is successful when the `AVAILABLE` output shows `1`.

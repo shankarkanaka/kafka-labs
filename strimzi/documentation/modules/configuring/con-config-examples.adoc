@@ -1,0 +1,55 @@
+:_mod-docs-content-type: CONCEPT
+
+// Module included in the following assemblies:
+//
+// assembly-config.adoc
+
+[id='config-examples-{context}']
+= Using example configuration files
+
+[role="_abstract"]
+Further enhance your deployment by incorporating additional supported configuration.
+Example configuration files are included in the Strimzi xref:downloads-{context}[deployment files].
+ifdef::Section[]
+You can also access the example files directly from the
+link:https://github.com/strimzi/strimzi-kafka-operator/tree/{GithubVersion}/examples/[`examples` directory^].
+endif::Section[]
+
+The example files include only the essential properties and values for custom resources by default. 
+You can download and apply the examples using the `kubectl` command-line tool.
+The examples can serve as a starting point when building your own Kafka component configuration for deployment.
+
+NOTE: If you installed Strimzi using the Operator, you can still download the example files and use them to upload configuration.
+
+The release artifacts include an `examples` directory that contains the configuration examples.
+
+.Example configuration files provided with Strimzi
+[source]
+--
+examples
+├── user <1>
+├── topic <2>
+├── security <3>
+│   ├── tls-auth
+│   ├── scram-sha-512-auth
+│   └── keycloak-authorization
+├── mirror-maker <4>
+├── metrics <5>
+├── kafka <6>
+├── cruise-control <7>
+├── connect <8>
+└── bridge <9>
+--
+<1> `KafkaUser` custom resource configuration, which is managed by the User Operator.
+<2> `KafkaTopic` custom resource configuration, which is managed by Topic Operator.
+<3> Authentication and authorization configuration for Kafka components. 
+Includes example configuration for TLS and SCRAM-SHA-512 authentication. 
+The Keycloak examples include a Keycloak realm specification and two `Kafka` custom resources with `type: custom` definitions for using OAuth 2.0 authentication and Keycloak authorization with or without metrics enabled.
+<4> `KafkaMirrorMaker2` custom resource configurations for a deployment of MirrorMaker 2. Includes example configuration for replication policy and synchronization frequency.
+<5> xref:assembly-metrics-config-files-{context}[Metrics configuration], including Prometheus installation and Grafana dashboard files.
+<6> `Kafka` and `KafkaNodePool` custom resource configurations for a deployment of Kafka clusters that use KRaft mode. Includes example configuration for an ephemeral or persistent single or multi-node deployment.
+<7> `Kafka` and `KafkaRebalance` configurations for deploying and using Cruise Control to manage clusters.
+`Kafka` configuration examples enable auto-rebalancing on scaling events and set default optimization goals.
+`KakaRebalance` configuration examples set proposal-specific optimization goals and generate optimization proposals in various supported modes.
+<8> `KafkaConnect` and `KafkaConnector` custom resource configuration for a deployment of Kafka Connect. Includes example configurations for a single or multi-node deployment.
+<9> `KafkaBridge` custom resource configuration for a deployment of HTTP Bridge.

@@ -1,0 +1,42 @@
+:_mod-docs-content-type: REFERENCE
+
+// Module included in the following assemblies:
+//
+// assembly-logging-configuration.adoc
+
+:_mod-docs-content-type: REFERENCE
+[id='ref-operator-cluster-logging-configmap-{context}']
+= Configuring Cluster Operator logging
+
+[role="_abstract"]
+Cluster Operator logging is controlled through a `ConfigMap` named `strimzi-cluster-operator`.
+
+This `ConfigMap` is created with default values during installation and is described in the file: `install/cluster-operator/050-ConfigMap-strimzi-cluster-operator.yaml`.
+
+To update the logging configuration, you can do one of the following:
+
+* Edit the YAML file and reapply it:
+[source,shell]
+kubectl create -f install/cluster-operator/050-ConfigMap-strimzi-cluster-operator.yaml
+* Edit the `ConfigMap` directly:
+[source,shell]
+kubectl edit configmap strimzi-cluster-operator
+
+Using this `ConfigMap`, you can control:
+
+* Root logger level
+* Log output format
+* Log levels for different components
+* Kafka `AdminClient` logging levels
+* Netty logging Levels
+* How often logging configuration is loaded
+
+The `monitorInterval` setting determines how often, in seconds, the logging configuration is dynamically reloaded.
+The default is 30 seconds.
+
+If the `ConfigMap` is missing when the Cluster Operator is deployed, the default logging configuration is used.
+
+If the `ConfigMap` is deleted after deployment, the most recently loaded logging configuration remains in effect.
+Create a new `ConfigMap` to load a new logging configuration.
+
+WARNING: Do not remove the `monitorInterval` option from the `ConfigMap`.

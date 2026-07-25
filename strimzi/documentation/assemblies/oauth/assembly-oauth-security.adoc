@@ -1,0 +1,36 @@
+:_mod-docs-content-type: ASSEMBLY
+
+[id='assembly-oauth-security-{context}']
+= Configuring OAuth 2.0 token-based security
+
+[role="_abstract"]
+Strimzi supports OAuth 2.0 token-based authentication and authorization for securing Kafka clusters and Kafka-related components.
+
+With OAuth 2.0 integration you can:
+
+* Enable token-based authentication on Kafka brokers  
+* Configure Kafka components, such as Kafka Connect, MirrorMaker 2, and the HTTP Bridge, to authenticate using access tokens  
+* Use token claims or Keycloak Authorization Services to perform fine-grained authorization
+
+OAuth 2.0 provides centralized identity and access control using access tokens issued by an authorization server.
+Kafka brokers validate these tokens when clients connect, and authorization providers can use token claims to make access decisions.
+
+This section describes the minimal configuration required to deploy a Kafka cluster and clients with token-based authentication and authorization.
+
+//migration
+include::../../modules/oauth/con-oauth-migration.adoc[leveloffset=+1]
+
+//oauth-project
+include::../../modules/oauth/con-oauth-project.adoc[leveloffset=+1]
+
+//server-side config
+include::../../modules/oauth/con-oauth-server-config.adoc[leveloffset=+1]
+
+//client-side config
+include::../../modules/oauth/con-oauth-client-config.adoc[leveloffset=+1]
+
+//enabling authorization
+include::../../modules/oauth/con-oauth-authz-config.adoc[leveloffset=+1]
+
+//using keycloak
+include::../../modules/oauth/con-oauth-keycloak-config.adoc[leveloffset=+1]

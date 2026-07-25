@@ -1,0 +1,41 @@
+:_mod-docs-content-type: CONCEPT
+
+To configure mTLS authentication, set the `type` property to the value `tls`.
+mTLS uses a TLS certificate to authenticate.
+
+The certificate is specified in the `certificateAndKey` property and is always loaded from a Kubernetes secret.
+In the secret, the certificate must be stored in X509 format under two different keys: public and private.
+
+.Example mTLS configuration
+[source,yaml,subs=attributes+]
+----
+authentication:
+  type: tls
+  certificateAndKey:
+    secretName: my-secret
+    certificate: my-public-tls-certificate-file.crt
+    key: private.key
+----
+
+You can use the secrets created by the User Operator,
+or you can create your own TLS certificate file, with the keys used for authentication, then create a `Secret` from the file:
+
+[source,shell,subs=+quotes]
+kubectl create secret generic <my_tls_secret> \
+--from-file=<my_public_tls_certificate>.crt \
+--from-file=<my_private_key>.key
+
+.Example secret for mTLS client authentication
+[source,yaml,subs="attributes+"]
+----
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-tls-secret
+type: Opaque
+data:
+  tls.crt: LS0tLS1CRUdJTiBDRVJ...
+  tls.key: LS0tLS1CRUdJTiBQUkl...
+----
+
+NOTE: mTLS authentication can only be used with TLS connections.

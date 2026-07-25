@@ -1,0 +1,138 @@
+:_mod-docs-content-type: CONCEPT
+
+// Module included in the following assemblies:
+//
+// assembly-security.adoc
+
+[id='con-certificate-renewal-{context}']
+= Certificate renewal and validity periods
+
+[role="_abstract"]
+Cluster CA and clients CA certificates are valid for a limited time, known as the validity period.
+This is defined as the number of days from the date the certificate was generated.
+
+For CA certificates automatically created by the Cluster Operator, configure the validity period for certificates in the `kafka` resource:
+
+* `Kafka.spec.clusterCa.validityDays` for Cluster CA certificates
+* `Kafka.spec.clientsCa.validityDays` for Clients CA certificates
+
+The default validity period for both certificates is 365 days.
+For manually-installed custom CA certificates, set validity through your certificate management system.
+
+When a CA certificate expires, components and clients that still trust the old certificate do not accept connections from peers whose certificates were signed by the CA private key.
+The components and clients must trust the _new_ CA certificate instead.
+
+To prevent loss of service, the Cluster Operator initiates certificate renewal before the old CA certificates expire.
+
+Configure the renewal period of the certificates created by the Cluster Operator in the `kafka` resource using the following properties:
+
+* `Kafka.spec.clusterCa.renewalDays` for Cluster CA certificates
+* `Kafka.spec.clientsCa.renewalDays` for Clients CA certificates
+
+The default renewal period for both certificates is 30 days from the expiry date of the current certificate.
+Changing the `validityDays` does not trigger immediate certificate renewal. 
+The updated value is applied the next time the certificate is renewed, either automatically or through manual renewal.
+
+.Validity period against renewal period
+[source]
+----
+Not Before                                     Not After
+    |                                              |
+    |<--------------- validityDays --------------->|
+                              <--- renewalDays --->|
+----
+
+Changes to `renewalDays` may trigger renewal earlier if the new value places the certificate within the renewal window.
+To schedule the renewal period at a convenient time, use xref:con-maintenance-time-window-definition-{context}[maintenance time windows].
+
+IMPORTANT: `maintenanceTimeWindows` apply *only* to certificates generated automatically by the Cluster Operator.  
+They do *not* apply to custom or externally managed certificates, so restarts triggered by updates to those certificates may occur outside the defined windows.
+With a custom Certificate Authority (CA), the Cluster Operator still manages the validity and renewal of the server certificates it generates.  
+In this case, `validityDays` and `renewalDays` apply to those server certificates, not to the CA itself.
+
+To change validity and renewal periods after creating the Kafka cluster:
+
+. Modify the `Kafka` custom resource.
+. xref:proc-renewing-ca-certs-manually-{context}[Manually renew the CA certificates].
+
+If you do not manually renew the certificates, the new settings take effect the next time the certificate is renewed automatically.
+
+.Example Kafka configuration for certificate validity and renewal periods
+[source,yaml,subs="+quotes,attributes"]
+----
+apiVersion: {KafkaApiVersion}
+kind: Kafka
+# ...
+spec:
+# ...
+  clusterCa:
+    renewalDays: 30
+    validityDays: 365
+    generateCertificateAuthority: true
+  clientsCa:
+    renewalDays: 30
+    validityDays: 365
+    generateCertificateAuthority: true
+# ...
+----
+
+Automatic certificate renewal depends on the `generateCertificateAuthority` setting:
+
+* If `true`, the Cluster Operator handles renewal.
+* If `false`, certificates must be managed externally. +
+Use this option if you are xref:installing-your-own-ca-certificates-{context}[installing your own certificates].
+
+== Cluster CA renewal
+
+To renew the Cluster CA certificate, the Cluster Operator does the following:
+
+. Generates a new Cluster CA certificate, retaining the existing private key.
++
+The renewed certificate replaces `ca.crt` in the Cluster CA secret.
+
+. Regenerates internal client certificates for the following components:
+** Kafka nodes
+** Entity Operator (Topic Operator and User Operator)
+** Kafka Exporter
+** Cruise Control
++
+These new certificates are not strictly required, because the signing key hasn't changed. 
+However, the Cluster Operator regenerates them to align their validity period with the new CA certificate.
+
+. Restarts the components to trust the new Cluster CA certificate and use the renewed internal certificates.
+
+== Clients CA renewal
+
+To renew the Clients CA certificate, the Cluster Operator and User Operator each perform part of the process:
+
+. The Cluster Operator generates a new Clients CA certificate, retaining the existing private key.
++
+The renewed certificate replaces `ca.crt` in the Clients CA secret.
+
+. The User Operator detects the updated Clients CA certificate and regenerates the user certificates that are signed by it.
+
+IMPORTANT: After renewal, you must ensure client applications update their truststores and keystores with the renewed user certificates before the old ones expire to avoid connection failures.
+
+== Managing certificate renewal for client applications
+
+The Strimzi operators do not manage external client applications. 
+You are responsible for ensuring that clients continue to connect successfully after certificate renewal.
+
+When the Clients CA is renewed, the User Operator automatically regenerates user certificates. 
+Client applications must be updated to use these renewed credentials before the old certificates expire.
+
+Client applications must be configured with the following:
+
+* A truststore that includes credentials from the `<cluster_name>-cluster-ca-cert` secret, which is created by the Cluster Operator and contains the public key to verify the Kafka cluster.
+* A keystore built from the `<kafka_user_name>` secret, which is created by the User Operator and contains the user's certificate and key.
+
+User secrets provide credentials in PEM and PKCS #12 formats, or a password if using SCRAM-SHA authentication. 
+The User Operator creates these secrets when a user is created.
+For an example of configuring secure clients, see xref:proc-configuring-secure-kafka-user-str[].
+
+If you provision client certificates manually, generate and distribute new certificates before the current ones expire. 
+Failure to do so can result in clients being unable to connect to the Kafka cluster.
+
+NOTE: For workloads in the same Kubernetes cluster and namespace, you can mount secrets as volumes. 
+This allows client pods to construct keystores and truststores dynamically from the current state of the secrets.
+For details, see xref:configuring-internal-clients-to-trust-cluster-ca-{context}[Configuring internal clients to trust the cluster CA].

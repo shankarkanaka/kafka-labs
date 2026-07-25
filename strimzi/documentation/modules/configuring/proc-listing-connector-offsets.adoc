@@ -1,0 +1,156 @@
+:_mod-docs-content-type: PROCEDURE
+
+// Module included in the following assemblies:
+//
+// assembly-config.adoc
+
+[id='proc-listing-connector-offsets-{context}']
+= Listing Kafka Connect connector offsets
+
+[role="_abstract"]
+To list connector offsets using `KafkaConnector` resources, configure the connector to write offsets to a `ConfigMap`.
+
+Offsets track the progress of data processing.
+If the referenced `ConfigMap` does not exist, Strimzi creates it.
+
+After the configuration is in place, annotate the `KafkaConnector` resource to write the offsets to the `ConfigMap`.
+
+Sink connectors use Kafka's standard consumer offset mechanism, while source connectors store offsets in a custom format within a Kafka topic.
+
+* For sink connectors, the list shows Kafka topic partitions and the last committed offset for each partition.
+* For source connectors, the list shows the source system’s partition and the last offset processed. 
+
+.Prerequisites
+
+* The Cluster Operator is running.
+
+.Procedure
+
+. Edit the `KafkaConnector` resource for the connector to include the `listOffsets` configuration.
++
+Example configuration to list connector offsets:
++
+[source,yaml,subs="+attributes"]
+----
+apiVersion: {KafkaConnectorApiVersion}
+kind: KafkaConnector
+metadata:
+  name: my-source-connector
+  labels:
+    strimzi.io/cluster: my-connect-cluster
+spec:
+  listOffsets:
+    toConfigMap:
+      name: my-connector-offsets
+  # ...  
+----
+* `spec.listOffsets.toConfigMap` specifies where the offsets are written.
+* `spec.listOffsets.toConfigMap.name` specifies the name of the ConfigMap.
+
+. Write the list of offsets by annotating the `KafkaConnector` resource:
++
+[source,shell]
+----
+kubectl annotate kafkaconnector my-source-connector strimzi.io/connector-offsets=list -n <namespace>
+----
++
+The annotation remains until either the list operation succeeds or it is manually removed from the resource.
+
+. After the `KafkaConnector` resource is updated, use the following command to check if the `ConfigMap` with the offsets was created:
++
+[source,shell]
+----
+kubectl get configmap my-connector-offsets -n <namespace>
+----
+
+. Inspect the contents of the `ConfigMap` to verify the offsets are being listed:
++
+[source,shell]
+----
+kubectl describe configmap my-connector-offsets -n <namespace>
+----
++
+Strimzi writes the offset information to the `offsets.json` property.
+Existing properties in the `ConfigMap` are preserved.
++
+--
+Example source connector offset list:
+
+[source,yaml,subs="+attributes"]
+----
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  # ...
+  ownerReferences:
+  - apiVersion: {KafkaConnectApiVersion}
+    blockOwnerDeletion: true
+    controller: false
+    kind: KafkaConnector
+    name: my-source-connector
+    uid: 637e3be7-bd96-43ab-abde-c55b4c4550e0
+  resourceVersion: "66951"
+  uid: 641d60a9-36eb-4f29-9895-8f2c1eb9638e
+data:
+  offsets.json: |-
+    {
+      "offsets": [
+        {
+          "partition": {
+            "filename": "/data/myfile.txt"
+          },
+          "offset": {
+            "position": 15295
+          }
+        }
+      ]
+    }
+----
+
+* `metadata.ownerReferences` links the `ConfigMap` to the `KafkaConnector` resource.
+  To use a custom owner reference, create the `ConfigMap` in advance and set the owner reference explicitly.
+* `partition.filename` identifies the source partition.
+  In this example, the partition is a file path used by a file-based source connector.
+* `offset.position` shows the last processed offset for the source partition.
+--
++
+--
+Example sink connector offset list:
+
+[source,yaml,subs="+attributes"]
+----
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  # ...
+  ownerReferences:
+  - apiVersion: {KafkaConnectApiVersion}
+    blockOwnerDeletion: true
+    controller: false
+    kind: KafkaConnector
+    name: my-sink-connector
+    uid: 84a29d7f-77e6-43ac-bfbb-719f9b9a4b3b
+  resourceVersion: "79241"
+  uid: 721e30bc-23df-41a2-9b48-fb2b7d9b042c
+data:
+  offsets.json: |-
+    {
+      "offsets": [
+        {
+          "partition": {
+            "kafka_topic": "my-topic",
+            "kafka_partition": 2
+          },
+          "offset": {
+            "kafka_offset": 4
+          }
+        }
+      ]
+    }
+----
+
+* `metadata.ownerReferences` links the `ConfigMap` to the `KafkaConnector` resource.
+* `partition.kafka_topic` specifies the Kafka topic consumed by the sink connector.
+* `partition.kafka_partition` specifies the partition of the Kafka topic.
+* `offset.kafka_offset` shows the last committed Kafka offset for that topic partition.
+--

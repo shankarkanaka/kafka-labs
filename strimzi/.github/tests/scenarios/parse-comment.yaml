@@ -1,0 +1,303 @@
+scenarios:
+  - id: comment-pipeline-only
+    description: "Comment with pipeline parameter only"
+    event: issue_comment
+    fixture: .github/tests/events/parse-comment/issue_comment_1.json
+    expectations:
+      pipelines: "regression,upgrade"
+      profiles: ""
+      tests: ""
+      groups: ""
+      kafka: "latest"
+      strimzi_feature_gates: ""
+      strimzi_rbac_scope: ""
+      cluster_operator_install_type: "yaml"
+      kube: "latest"
+      release: "latest"
+
+  - id: comment-profile-only
+    description: "Comment with profile parameter only"
+    event: issue_comment
+    fixture: .github/tests/events/parse-comment/issue_comment_2.json
+    expectations:
+      pipelines: ""
+      profiles: "operators,operands"
+      tests: "strimzi-tests"
+      groups: ""
+      kafka: "latest"
+      strimzi_feature_gates: ""
+      strimzi_rbac_scope: ""
+      cluster_operator_install_type: "yaml"
+      kube: "latest"
+      release: "latest"
+
+  - id: comment-additional-params
+    description: "Comment with additional parameters"
+    event: issue_comment
+    fixture: .github/tests/events/parse-comment/issue_comment_3.json
+    expectations:
+      pipelines: ""
+      profiles: ""
+      tests: ""
+      groups: "nodeport"
+      kafka: "4.1.0"
+      strimzi_feature_gates: ""
+      strimzi_rbac_scope: ""
+      cluster_operator_install_type: "yaml"
+      kube: "1.33.1"
+      architecture: "arm64"
+      agent: "strimzi-agent"
+      release: "latest"
+
+  - id: comment-pipeline-and-profile
+    description: "Comment with both pipeline and profile (pipeline priority)"
+    event: issue_comment
+    fixture: .github/tests/events/parse-comment/issue_comment_4.json
+    expectations:
+      pipelines: "regression,upgrade"
+      profiles: ""
+      groups: ""
+      kafka: "latest"
+      strimzi_feature_gates: ""
+      strimzi_rbac_scope: ""
+      cluster_operator_install_type: "yaml"
+      kube: "latest"
+      release: "latest"
+
+  - id: comment-pipeline-priority
+    description: "Comment with profile before pipeline (pipeline takes priority)"
+    event: issue_comment
+    fixture: .github/tests/events/parse-comment/issue_comment_5.json
+    expectations:
+      pipelines: "regression,upgrade"
+      profiles: ""
+      groups: ""
+      kafka: "latest"
+      strimzi_feature_gates: ""
+      strimzi_rbac_scope: ""
+      cluster_operator_install_type: "yaml"
+      kube: "latest"
+      release: "latest"
+
+  - id: comment-strimzi-params
+    description: "Comment with Strimzi-specific parameters"
+    event: issue_comment
+    fixture: .github/tests/events/parse-comment/issue_comment_6.json
+    expectations:
+      pipelines: ""
+      profiles: ""
+      tests: ""
+      groups: ""
+      kafka: "latest"
+      strimzi_feature_gates: "+SomeNewFeatureGate"
+      strimzi_rbac_scope: "NAMESPACE"
+      cluster_operator_install_type: "helm"
+      kube: "latest"
+      release: "latest"
+
+  - id: comment-basic-trigger
+    description: "Basic trigger without parameters"
+    event: issue_comment
+    fixture: .github/tests/events/parse-comment/issue_comment_7.json
+    expectations:
+      pipelines: ""
+      profiles: ""
+      tests: ""
+      groups: ""
+      kafka: "latest"
+      strimzi_feature_gates: ""
+      strimzi_rbac_scope: ""
+      cluster_operator_install_type: "yaml"
+      kube: "latest"
+      release: "latest"
+
+  - id: comment-empty-pipeline
+    description: "Comment with empty pipeline value (fallback to default)"
+    event: issue_comment
+    fixture: .github/tests/events/parse-comment/issue_comment_8.json
+    expectations:
+      pipelines: ""
+      profiles: "custom-profile"
+      tests: ""
+      groups: ""
+      kafka: "latest"
+      strimzi_feature_gates: ""
+      strimzi_rbac_scope: ""
+      cluster_operator_install_type: "yaml"
+      kube: "latest"
+      release: "latest"
+
+  - id: comment-no-trigger
+    description: "Comment without trigger phrase"
+    event: issue_comment
+    fixture: .github/tests/events/parse-comment/issue_comment_9.json
+    expectations:
+      pipelines: ""
+      profiles: ""
+      tests: ""
+      groups: ""
+      kafka: "latest"
+      strimzi_feature_gates: ""
+      strimzi_rbac_scope: ""
+      cluster_operator_install_type: "yaml"
+      kube: "latest"
+      release: "latest"
+
+  - id: comment-case-insensitive
+    description: "Uppercase trigger phrase (case insensitive)"
+    event: issue_comment
+    fixture: .github/tests/events/parse-comment/issue_comment_10.json
+    expectations:
+      pipelines: "regression,upgrade"
+      profiles: ""
+      tests: ""
+      groups: ""
+      kafka: "latest"
+      strimzi_feature_gates: ""
+      strimzi_rbac_scope: ""
+      cluster_operator_install_type: "yaml"
+      kube: "latest"
+      release: "latest"
+
+  - id: comment-random-tests
+    description: "Pass tests param without specifying profile or pipeline"
+    event: issue_comment
+    fixture: .github/tests/events/parse-comment/issue_comment_11.json
+    expectations:
+      pipelines: ""
+      profiles: ""
+      tests: "random-tests"
+      groups: ""
+      kafka: "latest"
+      strimzi_feature_gates: ""
+      strimzi_rbac_scope: ""
+      cluster_operator_install_type: "yaml"
+      kube: "latest"
+      release: "latest"
+
+  - id: dispatch-default
+    description: "Workflow dispatch with default values"
+    event: workflow_dispatch
+    fixture: .github/tests/events/parse-comment/dispatch_default.json
+    expectations:
+      pipelines: "regression,regression-fg,upgrade,acceptance-helm"
+      profiles: ""
+      strimzi_feature_gates: ""
+      strimzi_rbac_scope: ""
+      cluster_operator_install_type: "yaml"
+      kafka: "4.1.0"
+      release: "0.48.0"
+      kube: "latest"
+
+  - id: dispatch-custom
+    description: "Workflow dispatch with custom values"
+    event: workflow_dispatch
+    fixture: .github/tests/events/parse-comment/dispatch_custom.json
+    expectations:
+      pipelines: "custom-pipeline-1,custom-pipeline-2"
+      profiles: ""
+      strimzi_feature_gates: ""
+      strimzi_rbac_scope: ""
+      cluster_operator_install_type: "yaml"
+      tests: ""
+      groups: ""
+      kafka: "3.5.0"
+      release: "1.0.0"
+      kube: "latest"
+
+  - id: dispatch-empty
+    description: "Workflow dispatch with empty inputs"
+    event: workflow_dispatch
+    fixture: .github/tests/events/parse-comment/dispatch_empty.json
+    expectations:
+      pipelines: "smoke"
+      profiles: ""
+      strimzi_feature_gates: ""
+      strimzi_rbac_scope: ""
+      cluster_operator_install_type: "yaml"
+      tests: ""
+      groups: ""
+      kafka: "latest"
+      release: "latest"
+      kube: "latest"
+
+  - id: comment-with-backticks
+    description: "Comment with backticks and code blocks"
+    event: issue_comment
+    fixture: .github/tests/events/parse-comment/issue_comment_backticks.json
+    expectations:
+      pipelines: ""
+      profiles: ""
+      tests: ""
+      groups: ""
+      kafka: "3.8.0"
+      strimzi_feature_gates: ""
+      strimzi_rbac_scope: ""
+      cluster_operator_install_type: "yaml"
+      kube: "latest"
+      release: "latest"
+
+  - id: comment-closed-pr
+    description: "Comment on closed PR should not run"
+    event: issue_comment
+    fixture: .github/tests/events/parse-comment/issue_comment_closed_pr.json
+    expectations:
+      pipelines: "regression,upgrade"
+      profiles: ""
+      tests: ""
+      groups: ""
+      kafka: "latest"
+      strimzi_feature_gates: ""
+      strimzi_rbac_scope: ""
+      cluster_operator_install_type: "yaml"
+      kube: "latest"
+      release: "latest"
+
+  - id: comment-closed-issue
+    description: "Comment on closed issue should not run"
+    event: issue_comment
+    fixture: .github/tests/events/parse-comment/issue_comment_closed_issue.json
+    expectations:
+      pipelines: ""
+      profiles: "operators,operands"
+      tests: ""
+      groups: ""
+      kafka: "latest"
+      strimzi_feature_gates: ""
+      strimzi_rbac_scope: ""
+      cluster_operator_install_type: "yaml"
+      kube: "latest"
+      release: "latest"
+
+  - id: comment-closed-pr-random-comment
+    description: "Comment on closed issue should not run"
+    event: issue_comment
+    fixture: .github/tests/events/parse-comment/issue_comment_closed_pr_random_comment.json
+    expectations:
+      pipelines: ""
+      profiles: ""
+      tests: ""
+      groups: ""
+      kafka: "latest"
+      strimzi_feature_gates: ""
+      strimzi_rbac_scope: ""
+      cluster_operator_install_type: "yaml"
+      kube: "latest"
+      release: "latest"
+
+  - id: comment-kind-version
+    description: "Comment with kindVersion parameter"
+    event: issue_comment
+    fixture: .github/tests/events/parse-comment/issue_comment_12.json
+    expectations:
+      pipelines: ""
+      profiles: ""
+      tests: ""
+      groups: ""
+      kafka: "latest"
+      strimzi_feature_gates: ""
+      strimzi_rbac_scope: ""
+      cluster_operator_install_type: "yaml"
+      kube: "latest"
+      kind: "0.29.0"
+      release: "latest"

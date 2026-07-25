@@ -1,0 +1,332 @@
+/*
+ * Copyright Strimzi authors.
+ * License: Apache License 2.0 (see the file LICENSE or http://apache.org/licenses/LICENSE-2.0.html).
+ */
+package io.strimzi.operator.cluster.operator.assembly;
+
+import io.fabric8.kubernetes.api.model.IntOrString;
+import io.fabric8.kubernetes.api.model.Secret;
+import io.fabric8.kubernetes.api.model.ServiceAccount;
+import io.fabric8.kubernetes.api.model.apps.Deployment;
+import io.fabric8.kubernetes.api.model.networking.v1.NetworkPolicy;
+import io.fabric8.kubernetes.api.model.policy.v1.PodDisruptionBudget;
+import io.strimzi.api.kafka.model.kafka.Kafka;
+import io.strimzi.api.kafka.model.kafka.KafkaBuilder;
+import io.strimzi.api.kafka.model.kafka.exporter.KafkaExporterResources;
+import io.strimzi.api.kafka.model.kafka.listener.GenericKafkaListenerBuilder;
+import io.strimzi.api.kafka.model.kafka.listener.KafkaListenerType;
+import io.strimzi.operator.cluster.ClusterOperatorConfig;
+import io.strimzi.operator.cluster.KafkaVersionTestUtils;
+import io.strimzi.operator.cluster.ResourceUtils;
+import io.strimzi.operator.cluster.model.AbstractModel;
+import io.strimzi.operator.cluster.model.ClusterCa;
+import io.strimzi.operator.cluster.model.KafkaVersion;
+import io.strimzi.operator.cluster.operator.resource.ResourceOperatorSupplier;
+import io.strimzi.operator.cluster.operator.resource.kubernetes.DeploymentOperator;
+import io.strimzi.operator.cluster.operator.resource.kubernetes.NetworkPolicyOperator;
+import io.strimzi.operator.cluster.operator.resource.kubernetes.PodDisruptionBudgetOperator;
+import io.strimzi.operator.cluster.operator.resource.kubernetes.SecretOperator;
+import io.strimzi.operator.cluster.operator.resource.kubernetes.ServiceAccountOperator;
+import io.strimzi.operator.common.Annotations;
+import io.strimzi.operator.common.Reconciliation;
+import io.strimzi.operator.common.model.Ca;
+import io.strimzi.operator.common.model.PasswordGenerator;
+import io.strimzi.operator.common.operator.MockCertManager;
+import io.vertx.core.Future;
+import io.vertx.junit5.Checkpoint;
+import io.vertx.junit5.VertxExtension;
+import io.vertx.junit5.VertxTestContext;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+
+import java.time.Clock;
+import java.util.List;
+
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNotNull;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(VertxExtension.class)
+public class KafkaExporterReconcilerTest {
+    private static final String NAMESPACE = "namespace";
+    private static final String NAME = "name";
+    private static final KafkaVersion.Lookup VERSIONS = KafkaVersionTestUtils.getKafkaVersionLookup();
+
+    private final static ClusterCa CLUSTER_CA = new ClusterCa(
+            Reconciliation.DUMMY_RECONCILIATION,
+            new MockCertManager(),
+            new PasswordGenerator(10, "a", "a"),
+            ResourceUtils.createInitialCaCertSecret(NAMESPACE, NAME, AbstractModel.clusterCaCertSecretName(NAME), MockCertManager.clusterCaCert(), MockCertManager.clusterCaCertStore(), "123456"),
+            ResourceUtils.createInitialCaKeySecret(NAMESPACE, NAME, AbstractModel.clusterCaKeySecretName(NAME), MockCertManager.clusterCaKey())
+    );
+    private final static Kafka KAFKA = new KafkaBuilder()
+            .withNewMetadata()
+                .withNamespace(NAMESPACE)
+                .withName(NAME)
+            .endMetadata()
+            .withNewSpec()
+                .withNewKafka()
+                    .withListeners(new GenericKafkaListenerBuilder()
+                                    .withName("plain")
+                                    .withPort(9092)
+                                    .withType(KafkaListenerType.INTERNAL)
+                                    .withTls(false)
+                                    .build(),
+                            new GenericKafkaListenerBuilder()
+                                    .withName("tls")
+                                    .withPort(9093)
+                                    .withType(KafkaListenerType.INTERNAL)
+                                    .withTls(true)
+                                    .build())
+                .endKafka()
+            .endSpec()
+            .build();
+
+    /*
+     * Tests Kafka Exporter reconciliation when Kafka Exporter is enabled. In such case, the KE Deployment and all other
+     * resources should be created ot updated. So the reconcile methods should be called with non-null values.
+     */
+    @Test
+    public void reconcileWithEnabledExporter(VertxTestContext context) {
+        ResourceOperatorSupplier supplier = ResourceUtils.supplierWithMocks(false);
+
+        ServiceAccountOperator mockSaOps = supplier.serviceAccountOperations;
+        when(mockSaOps.reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), any())).thenReturn(Future.succeededFuture());
+
+        SecretOperator mockSecretOps = supplier.secretOperations;
+        when(mockSecretOps.getAsync(eq(NAMESPACE), eq(KafkaExporterResources.secretName(NAME)))).thenReturn(Future.succeededFuture());
+        when(mockSecretOps.reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.secretName(NAME)), any())).thenReturn(Future.succeededFuture());
+
+        NetworkPolicyOperator mockNetPolicyOps = supplier.networkPolicyOperator;
+        when(mockNetPolicyOps.reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), any())).thenReturn(Future.succeededFuture());
+
+        DeploymentOperator mockDepOps = supplier.deploymentOperations;
+        when(mockDepOps.reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), any())).thenReturn(Future.succeededFuture());
+        when(mockDepOps.waitForObserved(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), anyLong(), anyLong())).thenReturn(Future.succeededFuture());
+        when(mockDepOps.readiness(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), anyLong(), anyLong())).thenReturn(Future.succeededFuture());
+
+        PodDisruptionBudgetOperator mockPodDisruptionBudgetOps = supplier.podDisruptionBudgetOperator;
+        when(mockPodDisruptionBudgetOps.reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), any())).thenReturn(Future.succeededFuture());
+
+        Kafka kafka = new KafkaBuilder(KAFKA)
+                .editSpec()
+                    .withNewKafkaExporter()
+                    .endKafkaExporter()
+                .endSpec()
+                .build();
+
+        KafkaExporterReconciler reconciler = new KafkaExporterReconciler(
+                Reconciliation.DUMMY_RECONCILIATION,
+                ResourceUtils.dummyClusterOperatorConfig(),
+                supplier,
+                kafka,
+                VERSIONS,
+                CLUSTER_CA
+        );
+
+        Checkpoint async = context.checkpoint();
+        reconciler.reconcile(false, null, null, Clock.systemUTC())
+                .onComplete(context.succeeding(v -> context.verify(() -> {
+                    verify(mockSaOps, times(1)).reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), isNotNull());
+
+                    verify(mockSecretOps, times(1)).reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.secretName(NAME)), isNotNull());
+
+                    ArgumentCaptor<NetworkPolicy> netPolicyCaptor = ArgumentCaptor.forClass(NetworkPolicy.class);
+                    verify(mockNetPolicyOps, times(1)).reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), netPolicyCaptor.capture());
+                    assertThat(netPolicyCaptor.getValue(), is(notNullValue()));
+                    assertThat(netPolicyCaptor.getValue().getSpec().getIngress().size(), is(1));
+                    assertThat(netPolicyCaptor.getValue().getSpec().getIngress().get(0).getPorts().size(), is(1));
+                    assertThat(netPolicyCaptor.getValue().getSpec().getIngress().get(0).getPorts().get(0).getPort().getIntVal(), is(9404));
+                    assertThat(netPolicyCaptor.getValue().getSpec().getIngress().get(0).getFrom(), is(List.of()));
+
+                    ArgumentCaptor<Deployment> depCaptor = ArgumentCaptor.forClass(Deployment.class);
+                    verify(mockDepOps, times(1)).reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), depCaptor.capture());
+                    assertThat(depCaptor.getValue(), is(notNullValue()));
+                    assertThat(depCaptor.getValue().getSpec().getTemplate().getMetadata().getAnnotations().get(Ca.ANNO_STRIMZI_IO_CLUSTER_CA_CERT_GENERATION), is("0"));
+                    assertThat(depCaptor.getValue().getSpec().getTemplate().getMetadata().getAnnotations().get(Ca.ANNO_STRIMZI_IO_CLUSTER_CA_KEY_GENERATION), is("0"));
+                    assertThat(depCaptor.getValue().getSpec().getTemplate().getMetadata().getAnnotations().get(Annotations.ANNO_STRIMZI_SERVER_CERT_HASH), is("4d715cdd"));
+
+
+                    ArgumentCaptor<PodDisruptionBudget> pdbCaptor = ArgumentCaptor.forClass(PodDisruptionBudget.class);
+                    verify(mockPodDisruptionBudgetOps, times(1)).reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), pdbCaptor.capture());
+                    assertThat(pdbCaptor.getValue(), is(notNullValue()));
+                    assertThat(pdbCaptor.getValue().getSpec().getMinAvailable(), is(new IntOrString(0)));
+
+                    async.flag();
+                })));
+    }
+
+    /*
+     * Tests Kafka Exporter reconciliation when Kafka Exporter is enabled. In such case, the KE Deployment and all other
+     * resources should be created ot updated. So the reconcile methods should be called with non-null values. However,
+     * when the network policy generation is disabled, network policies should not be touched (so the reconcile should
+     * not be called.)
+     */
+    @Test
+    public void reconcileWithEnabledExporterWithoutNetworkPolicies(VertxTestContext context) {
+        ResourceOperatorSupplier supplier = ResourceUtils.supplierWithMocks(false);
+
+        ServiceAccountOperator mockSaOps = supplier.serviceAccountOperations;
+        when(mockSaOps.reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), any())).thenReturn(Future.succeededFuture());
+
+        SecretOperator mockSecretOps = supplier.secretOperations;
+        when(mockSecretOps.getAsync(eq(NAMESPACE), eq(KafkaExporterResources.secretName(NAME)))).thenReturn(Future.succeededFuture());
+        when(mockSecretOps.reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.secretName(NAME)), any())).thenReturn(Future.succeededFuture());
+
+        NetworkPolicyOperator mockNetPolicyOps = supplier.networkPolicyOperator;
+
+        DeploymentOperator mockDepOps = supplier.deploymentOperations;
+        when(mockDepOps.reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), any())).thenReturn(Future.succeededFuture());
+        when(mockDepOps.waitForObserved(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), anyLong(), anyLong())).thenReturn(Future.succeededFuture());
+        when(mockDepOps.readiness(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), anyLong(), anyLong())).thenReturn(Future.succeededFuture());
+
+        PodDisruptionBudgetOperator mockPodDisruptionBudgetOps = supplier.podDisruptionBudgetOperator;
+        when(mockPodDisruptionBudgetOps.reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), any())).thenReturn(Future.succeededFuture());
+
+        Kafka kafka = new KafkaBuilder(KAFKA)
+                .editSpec()
+                    .withNewKafkaExporter()
+                    .endKafkaExporter()
+                .endSpec()
+                .build();
+
+        KafkaExporterReconciler reconciler = new KafkaExporterReconciler(
+                Reconciliation.DUMMY_RECONCILIATION,
+                new ClusterOperatorConfig.ClusterOperatorConfigBuilder(ResourceUtils.dummyClusterOperatorConfig(), KafkaVersionTestUtils.getKafkaVersionLookup())
+                        .with(ClusterOperatorConfig.NETWORK_POLICY_GENERATION.key(), "false").build(),
+                supplier,
+                kafka,
+                VERSIONS,
+                CLUSTER_CA
+        );
+
+        Checkpoint async = context.checkpoint();
+        reconciler.reconcile(false, null, null, Clock.systemUTC())
+                .onComplete(context.succeeding(v -> context.verify(() -> {
+                    ArgumentCaptor<ServiceAccount> saCaptor = ArgumentCaptor.forClass(ServiceAccount.class);
+                    verify(mockSaOps, times(1)).reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), saCaptor.capture());
+                    assertThat(saCaptor.getValue(), is(notNullValue()));
+
+                    ArgumentCaptor<Secret> secretCaptor = ArgumentCaptor.forClass(Secret.class);
+                    verify(mockSecretOps, times(1)).reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.secretName(NAME)), secretCaptor.capture());
+                    assertThat(secretCaptor.getAllValues().get(0), is(notNullValue()));
+
+                    verify(mockNetPolicyOps, never()).reconcile(any(), eq(NAMESPACE), any(), any());
+
+                    verify(mockDepOps, times(1)).reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), isNotNull());
+
+                    ArgumentCaptor<PodDisruptionBudget> pdbCaptor = ArgumentCaptor.forClass(PodDisruptionBudget.class);
+                    verify(mockPodDisruptionBudgetOps, times(1)).reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), pdbCaptor.capture());
+                    assertThat(pdbCaptor.getValue(), is(notNullValue()));
+                    assertThat(pdbCaptor.getValue().getSpec().getMinAvailable(), is(new IntOrString(0)));
+
+                    async.flag();
+                })));
+    }
+
+    /*
+     * Tests Kafka Exporter reconciliation when Kafka Exporter is disabled. In such case, the KE Deployment and all other
+     * resources should be deleted. So the reconcile methods should be called with null values.
+     */
+    @Test
+    public void reconcileWithDisabledExporter(VertxTestContext context) {
+        ResourceOperatorSupplier supplier = ResourceUtils.supplierWithMocks(false);
+
+        ServiceAccountOperator mockSaOps = supplier.serviceAccountOperations;
+        when(mockSaOps.reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), any())).thenReturn(Future.succeededFuture());
+
+        SecretOperator mockSecretOps = supplier.secretOperations;
+        when(mockSecretOps.reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.secretName(NAME)), any())).thenReturn(Future.succeededFuture());
+
+        NetworkPolicyOperator mockNetPolicyOps = supplier.networkPolicyOperator;
+        when(mockNetPolicyOps.reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), any())).thenReturn(Future.succeededFuture());
+
+        DeploymentOperator mockDepOps = supplier.deploymentOperations;
+        when(mockDepOps.reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), any())).thenReturn(Future.succeededFuture());
+        when(mockDepOps.waitForObserved(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), anyLong(), anyLong())).thenReturn(Future.succeededFuture());
+        when(mockDepOps.readiness(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), anyLong(), anyLong())).thenReturn(Future.succeededFuture());
+
+        PodDisruptionBudgetOperator mockPodDisruptionBudgetOps = supplier.podDisruptionBudgetOperator;
+        when(mockPodDisruptionBudgetOps.reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), any())).thenReturn(Future.succeededFuture());
+
+        KafkaExporterReconciler reconciler = new KafkaExporterReconciler(
+                Reconciliation.DUMMY_RECONCILIATION,
+                ResourceUtils.dummyClusterOperatorConfig(),
+                supplier,
+                KAFKA,
+                VERSIONS,
+                CLUSTER_CA
+        );
+
+        Checkpoint async = context.checkpoint();
+        reconciler.reconcile(false, null, null, Clock.systemUTC())
+                .onComplete(context.succeeding(v -> context.verify(() -> {
+                    verify(mockSaOps, times(1)).reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), isNull());
+                    verify(mockSecretOps, times(1)).reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.secretName(NAME)), isNull());
+                    verify(mockNetPolicyOps, times(1)).reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), isNull());
+                    verify(mockDepOps, times(1)).reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), isNull());
+                    verify(mockPodDisruptionBudgetOps, times(1)).reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), isNull());
+
+                    async.flag();
+                })));
+    }
+
+    /*
+     * Tests Kafka Exporter reconciliation when Kafka Exporter is disabled. In such case, the KE Deployment and all other
+     * resources should be deleted. So the reconcile methods should be called with null values. However, when the network
+     * policy generation is disabled, network policies should not be touched (so the reconcile should not be called.)
+     */
+    @Test
+    public void reconcileWithDisabledExporterWithoutNetworkPolicies(VertxTestContext context) {
+        ResourceOperatorSupplier supplier = ResourceUtils.supplierWithMocks(false);
+
+        ServiceAccountOperator mockSaOps = supplier.serviceAccountOperations;
+        when(mockSaOps.reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), any())).thenReturn(Future.succeededFuture());
+
+        SecretOperator mockSecretOps = supplier.secretOperations;
+        ArgumentCaptor<Secret> secretCaptor = ArgumentCaptor.forClass(Secret.class);
+        when(mockSecretOps.reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.secretName(NAME)), secretCaptor.capture())).thenReturn(Future.succeededFuture());
+
+        NetworkPolicyOperator mockNetPolicyOps = supplier.networkPolicyOperator;
+
+        DeploymentOperator mockDepOps = supplier.deploymentOperations;
+        when(mockDepOps.reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), any())).thenReturn(Future.succeededFuture());
+        when(mockDepOps.waitForObserved(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), anyLong(), anyLong())).thenReturn(Future.succeededFuture());
+        when(mockDepOps.readiness(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), anyLong(), anyLong())).thenReturn(Future.succeededFuture());
+
+        PodDisruptionBudgetOperator mockPodDisruptionBudgetOps = supplier.podDisruptionBudgetOperator;
+        when(mockPodDisruptionBudgetOps.reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), any())).thenReturn(Future.succeededFuture());
+
+        KafkaExporterReconciler reconciler = new KafkaExporterReconciler(
+                Reconciliation.DUMMY_RECONCILIATION,
+                new ClusterOperatorConfig.ClusterOperatorConfigBuilder(ResourceUtils.dummyClusterOperatorConfig(), KafkaVersionTestUtils.getKafkaVersionLookup())
+                        .with(ClusterOperatorConfig.NETWORK_POLICY_GENERATION.key(), "false").build(),
+                supplier,
+                KAFKA,
+                VERSIONS,
+                CLUSTER_CA
+        );
+
+        Checkpoint async = context.checkpoint();
+        reconciler.reconcile(false, null, null, Clock.systemUTC())
+                .onComplete(context.succeeding(v -> context.verify(() -> {
+                    verify(mockSaOps, times(1)).reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), isNull());
+                    verify(mockSecretOps, times(1)).reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.secretName(NAME)), isNull());
+                    verify(mockNetPolicyOps, never()).reconcile(any(), eq(NAMESPACE), any(), any());
+                    verify(mockDepOps, times(1)).reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), isNull());
+                    verify(mockPodDisruptionBudgetOps, times(1)).reconcile(any(), eq(NAMESPACE), eq(KafkaExporterResources.componentName(NAME)), isNull());
+
+                    async.flag();
+                })));
+    }
+}

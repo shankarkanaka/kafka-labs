@@ -1,0 +1,91 @@
+/*
+ * Copyright Strimzi authors.
+ * License: Apache License 2.0 (see the file LICENSE or http://apache.org/licenses/LICENSE-2.0.html).
+ */
+package io.strimzi.api.kafka.model.bridge;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import io.strimzi.api.kafka.model.common.Constants;
+import io.strimzi.api.kafka.model.common.UnknownPropertyPreserving;
+import io.strimzi.crdgenerator.annotations.Description;
+import io.strimzi.crdgenerator.annotations.DescriptionFile;
+import io.strimzi.crdgenerator.annotations.Minimum;
+import io.sundr.builder.annotations.Buildable;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * A representation of the HTTP configuration.
+ */
+@DescriptionFile
+@Buildable(
+        editableEnabled = false,
+        builderPackage = Constants.FABRIC8_KUBERNETES_API
+)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonPropertyOrder({"port", "tls", "cors"})
+@EqualsAndHashCode
+@ToString
+public class KafkaBridgeHttpConfig implements UnknownPropertyPreserving {
+    public static final int HTTP_DEFAULT_PORT = 8080;
+    public static final String HTTP_DEFAULT_HOST = "0.0.0.0";
+    private int port = HTTP_DEFAULT_PORT;
+    private KafkaBridgeHttpTls tls;
+    private KafkaBridgeHttpCors cors;
+    private Map<String, Object> additionalProperties;
+
+    public KafkaBridgeHttpConfig() { }
+
+    public KafkaBridgeHttpConfig(int port) {
+        this.port = port;
+    }
+
+    @Description("Port the server listens on.")
+    @JsonProperty(defaultValue = "8080")
+    @Minimum(1023)
+    public int getPort() {
+        return port;
+    }
+
+    public void setPort(int port) {
+        this.port = port;
+    }
+
+    @Description("TLS configuration for clients connections to the HTTP Bridge.")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public KafkaBridgeHttpTls getTls() {
+        return tls;
+    }
+
+    public void setTls(KafkaBridgeHttpTls tls) {
+        this.tls = tls;
+    }
+
+    @Description("CORS configuration for the HTTP Bridge.")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public KafkaBridgeHttpCors getCors() {
+        return cors;
+    }
+
+    public void setCors(KafkaBridgeHttpCors cors) {
+        this.cors = cors;
+    }
+
+    @Override
+    public Map<String, Object> getAdditionalProperties() {
+        return this.additionalProperties != null ? this.additionalProperties : Map.of();
+    }
+
+    @Override
+    public void setAdditionalProperty(String name, Object value) {
+        if (this.additionalProperties == null) {
+            this.additionalProperties = new HashMap<>(2);
+        }
+        this.additionalProperties.put(name, value);
+    }
+}

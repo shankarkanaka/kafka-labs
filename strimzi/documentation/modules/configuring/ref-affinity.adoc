@@ -1,0 +1,71 @@
+:_mod-docs-content-type: REFERENCE
+
+// Module included in the following assemblies:
+//
+// assembly-scheduling.adoc
+
+[id='affinity-{context}']
+= Scheduling strategies
+
+[role="_abstract"]
+Kafka components can be scheduled onto Kubernetes nodes using affinity rules, tolerations, and topology constraints.  
+These strategies help isolate workloads, optimize resource usage, and improve overall cluster performance.
+
+The following scheduling techniques support different deployment goals:
+
+Use pod anti-affinity to avoid critical applications sharing nodes::
+Use pod anti-affinity to prevent critical applications from being scheduled on the same disk.  
+In Kafka deployments, configure pod anti-affinity to ensure that Kafka brokers do not share nodes with other workloads, such as databases.
+
+Use node affinity to schedule workloads onto specific nodes::
+Kubernetes clusters often include nodes optimized for different workloads, such as CPU, memory, storage, or network.  
+Node affinity enables scheduling Kafka components onto nodes that match specific labels, such as `node.kubernetes.io/instance-type` or custom labels, to optimize performance and cost.
+
+Use node affinity, taints, and tolerations for dedicated nodes::
+To reserve nodes for Kafka, you can taint them to exclude them from general workloads. 
+Kafka pods can still be scheduled onto these nodes by configuring:
++
+--
+* Tolerations, which allow the pods to bypass the taint.
+* Node affinity, for the pods to run on those specific nodes.
+--
++  
+These settings direct Kafka pods to dedicated nodes while preventing other workloads from being scheduled there
+This approach isolates Kafka from other workloads, reducing resource contention and improving stability.
+
+Use topology spread constraints to balance pods across zones or nodes::
+Topology spread constraints help distribute pods evenly across specified topology domains, such as zones, regions, or nodes.
+For Kafka, this strategy reduces the risk of scheduling too many brokers on the same zone or node, improving availability and resilience.
+
+You can apply these scheduling strategies in the `template.pod` property within the `spec` of a Strimzi custom resource. 
+
+For Kafka brokers specifically, Strimzi provides a two-level configuration:
+
+* `Kafka.spec.kafka.template.pod` +
+Use this to set a cluster-wide default scheduling policy for all Kafka broker and controller pods.
+* `KafkaNodePool.spec.template.pod` + 
+For more granular control, if needed, you can override the default policy for specific node pools using the `KafkaNodePool` resource.
+
+IMPORTANT: If a property is defined in both `KafkaNodePool.spec.template` and `Kafka.spec.kafka.template`, the property defined in the node pool is used.
+For example, node pools that use `KafkaNodePool.spec.template.pod` settings do not inherit pod settings from the cluster-wide template.
+
+Other Strimzi components have their own template properties for scheduling:
+
+* `Kafka.spec.kafka.template.pod`
+* `KafkaNodePool.spec.template.pod`
+* `Kafka.spec.entityOperator.template.pod`
+* `Kafka.spec.cruiseControl.template.pod`
+* `KafkaConnect.spec.template.pod`
+* `KafkaBridge.spec.template.pod`
+* `KafkaMirrorMaker2.spec.template.pod`
+
+The following procedures provide scheduling configuration examples for the `Kafka` and `KafkaNodePool` resources. 
+The same configurations shown in these examples can be applied to the `template.pod` property of any other component.
+
+Scheduling properties follow the Kubernetes specification.
+
+.Additional resources
+
+* {K8sAffinity}
+* {K8sTolerations}
+* {K8sTopologySpreadConstraints}

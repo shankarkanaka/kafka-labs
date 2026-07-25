@@ -1,0 +1,36 @@
+:_mod-docs-content-type: CONCEPT
+
+Configures the `Kafka` custom resource to use simple authorization and define Access Control Lists (ACLs).
+
+ACLs allow you to define which users have access to which resources at a granular level.
+
+Strimzi uses Kafka's built-in `StandardAuthorizer` authorization plugin.
+
+Set the `type` property in the `authorization` section to the value `simple`,
+and configure a list of super users.
+Super users are always allowed without querying ACL rules.
+
+Access rules are configured for the `KafkaUser`, as described in the xref:type-AclRule-reference[ACLRule schema reference].
+
+.Example `simple` authorization configuration
+[source,yaml,subs="attributes+"]
+----
+apiVersion: {KafkaApiVersion}
+kind: Kafka
+metadata:
+  name: my-cluster
+  namespace: myproject
+spec:
+  kafka:
+    # ...
+    authorization:
+      type: simple
+      superUsers:
+        - CN=user-1
+        - user-2
+        - CN=user-3
+    # ...
+----
+
+NOTE: The `super.user` configuration option in the `config` property in `Kafka.spec.kafka` is ignored.
+Designate super users in the `authorization` property instead. 

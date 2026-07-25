@@ -1,0 +1,28 @@
+:_mod-docs-content-type: ASSEMBLY
+
+// This assembly is included in the following assemblies:
+//
+// assembly-config.adoc
+
+[id='assembly-scheduling-{context}']
+= Configuring pod scheduling
+
+[role="_abstract"]
+To optimize the resilience and performance of your Kafka cluster, you can control how its pods are scheduled across Kubernetes nodes.
+Pod scheduling strategies can help you to achieve the following:
+
+* Increase fault tolerance by spreading Kafka pods across different nodes.
+* Avoid resource contention by separating pods from critical workloads.
+* Maintain resource availability by assigning Kafka pods to nodes with sufficient capacity.
+
+include::../../modules/configuring/ref-affinity.adoc[leveloffset=+1]
+
+include::../../modules/configuring/proc-scheduling-brokers-on-different-worker-nodes.adoc[leveloffset=+1]
+
+include::../../modules/configuring/proc-distributing-brokers-across-zones.adoc[leveloffset=+1]
+
+include::../../modules/configuring/proc-scheduling-based-on-other-pods.adoc[leveloffset=+1]
+
+include::../../modules/configuring/proc-scheduling-deployment-to-node-using-node-affinity.adoc[leveloffset=+1]
+
+include::../../modules/configuring/proc-dedicated-nodes.adoc[leveloffset=+1]

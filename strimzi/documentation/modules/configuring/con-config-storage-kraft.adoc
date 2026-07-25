@@ -1,0 +1,207 @@
+:_mod-docs-content-type: CONCEPT
+
+// Module included in the following assemblies:
+//
+// assembly-storage.adoc
+
+[id='con-config-storage-kraft-{context}']
+= Configuring storage types
+
+[role="_abstract"]
+Use the `storage` properties of the `KafkaNodePool` custom resource to configure storage for a deployment of Kafka in KRaft mode.
+
+== Configuring ephemeral storage
+
+To use ephemeral storage, specify `ephemeral` as the storage type.  
+
+.Example configuration for ephemeral storage
+[source,yaml,subs="+attributes"]
+----
+apiVersion: {KafkaNodePoolApiVersion}
+kind: KafkaNodePool
+metadata:
+  name: my-node-pool
+  labels:
+    strimzi.io/cluster: my-cluster
+spec:
+  replicas: 3
+  roles:
+    - broker
+  storage:
+    type: ephemeral
+  # ...
+----
+
+Ephemeral storage uses {K8sEmptyDir} volumes, which are created when a pod is assigned to a node. 
+You can limit the size of the `emptyDir` volume with the `sizeLimit` property.
+
+The ephemeral volume used by Kafka brokers for log directories is mounted at `/var/lib/kafka/data/kafka-log<pod_id>`.
+
+IMPORTANT: Ephemeral storage is not suitable for Kafka topics with a replication factor of 1.
+
+For more information on ephemeral storage configuration options, see the link:{BookURLConfiguring}#type-EphemeralStorage-reference[`EphemeralStorage` schema reference^].
+
+== Configuring persistent storage
+
+To use persistent storage, specify one of the following as the storage type:
+
+* `persistent-claim` for a single persistent volume
+* `jbod` for multiple persistent volumes in a Kafka cluster (Recommended for Kafka in a production environment)
+
+.Example configuration for persistent storage 
+[source,yaml,subs="+attributes"]
+----
+apiVersion: {KafkaNodePoolApiVersion}
+kind: KafkaNodePool
+metadata:
+  name: my-node-pool
+  labels:
+    strimzi.io/cluster: my-cluster
+spec:
+  replicas: 3
+  roles:
+    - broker
+  storage:
+    type: persistent-claim
+    size: 500Gi
+    deleteClaim: true
+  # ...
+----
+
+Strimzi uses {K8sPersistentVolumeClaims} (PVCs) to request storage on persistent volumes (PVs). 
+The PVC binds to a PV that meets the requested storage criteria, without needing to know the underlying storage infrastructure.
+
+PVCs created for Kafka pods follow the naming convention `data-<kafka_cluster_name>-<pool_name>-<pod_id>`, and the persistent volumes for Kafka logs are mounted at `/var/lib/kafka/data/kafka-log<pod_id>`.
+
+You can also specify custom storage classes ({K8SStorageClass}) and volume selectors in the storage configuration.
+
+.Example class and selector configuration
+[source,yaml,subs="attributes+"]
+----
+# ...
+  storage:
+    type: persistent-claim
+    size: 500Gi
+    class: my-storage-class
+    selector:
+      hdd-type: ssd
+    deleteClaim: true
+# ...        
+----
+
+Storage classes define storage profiles and dynamically provision persistent volumes (PVs) based on those profiles. 
+This is useful, for example, when storage classes are restricted to different availability zones or data centers.
+If a storage class is not specified, the default storage class in the Kubernetes cluster is used. 
+Selectors specify persistent volumes that offer specific features, such as solid-state drive (SSD) volumes.
+
+For more information on persistent storage configuration options, see the link:{BookURLConfiguring}#type-PersistentClaimStorage-reference[`PersistentClaimStorage` schema reference^].
+
+[id='proc-resizing-persistent-volumes-{context}']
+== Resizing persistent volumes
+
+Persistent volumes can be resized by changing the `size` storage property without any risk of data loss, as long as the storage infrastructure supports it. 
+Following a configuration update to change the size of the storage, Strimzi instructs the storage infrastructure to make the change. 
+
+Storage expansion is supported in Strimzi clusters that use persistent-claim volumes.
+Decreasing the size of persistent volumes is not supported in Kubernetes.
+For more information about resizing persistent volumes in Kubernetes, see {K8sResizingPersistentVolumesUsingKubernetes}.
+
+After increasing the value of the `size` property, Kubernetes increases the capacity of the selected persistent volumes in response to a request from the Cluster Operator.
+When the resizing is complete, the Cluster Operator restarts all pods that use the resized persistent volumes.
+This happens automatically.
+
+In this example, the volumes are increased to 2000Gi.
+
+.Kafka configuration to increase volume size to `2000Gi`
+[source,yaml,subs=attributes+]
+----
+apiVersion: {KafkaNodePoolApiVersion}
+kind: KafkaNodePool
+metadata:
+  name: my-node-pool
+  labels:
+    strimzi.io/cluster: my-cluster
+spec:
+  replicas: 3
+  roles:
+    - broker
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: 2000Gi
+      - id: 1
+        type: persistent-claim
+        size: 2000Gi
+      - id: 2
+        type: persistent-claim
+        size: 2000Gi
+  # ...
+----
+
+Returning information on the PVs verifies the changes:
+
+[source,shell,subs=+quotes]
+----
+kubectl get pv
+----
+
+.Storage capacity of PVs
+[source,shell,subs="+quotes,attributes"]
+----
+NAME               CAPACITY   CLAIM
+pvc-0ca459ce-...   2000Gi     my-project/data-my-cluster-my-node-pool-2
+pvc-6e1810be-...   2000Gi     my-project/data-my-cluster-my-node-pool-0
+pvc-82dc78c9-...   2000Gi     my-project/data-my-cluster-my-node-pool-1
+----
+
+The output shows the names of each PVC associated with a broker pod.
+
+NOTE: Storage _reduction_ is only possible when using multiple disks per broker.
+You can remove a disk after moving all partitions on the disk to other volumes within the same broker (intra-broker) or to other brokers within the same cluster (intra-cluster).
+
+
+== Configuring JBOD storage
+
+To use JBOD storage, specify `jbod` as the storage type and add configuration for the JBOD volumes.
+JBOD volumes can be persistent or ephemeral, with the configuration options and constraints applicable to each type.
+
+.Example configuration for JBOD storage 
+[source,yaml,subs="+attributes"]
+----
+apiVersion: {KafkaNodePoolApiVersion}
+kind: KafkaNodePool
+metadata:
+  name: my-node-pool
+  labels:
+    strimzi.io/cluster: my-cluster
+spec:
+  replicas: 3
+  roles:
+    - broker
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: 100Gi
+      - id: 1
+        type: persistent-claim
+        size: 100Gi
+      - id: 2
+        type: persistent-claim
+        size: 100Gi
+  # ...
+----
+
+PVCs are created for the JBOD volumes using the naming convention `data-<volume_id>-<kafka_cluster_name>-<pool_name>-<pod_id>`, and the JBOD volumes used for log directories are mounted at `/var/lib/kafka/data-<volume_id>/kafka-log<pod_id>`.
+
+[id='proc-adding-removing-volumes-{context}']
+== Adding or removing volumes from JBOD storage
+
+Volume IDs cannot be changed once JBOD volumes are created, though you can add or remove volumes.
+When adding a new volume to the to the `volumes` array under an `id` which was already used in the past and removed, make sure that the previously used `PersistentVolumeClaims` have been deleted.
+
+Use Cruise Control to reassign partitions when adding or removing volumes. 
+For information on intra-broker disk balancing, see xref:con-rebalance-{context}[].

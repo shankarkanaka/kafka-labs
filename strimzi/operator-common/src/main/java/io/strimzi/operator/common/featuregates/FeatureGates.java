@@ -1,0 +1,281 @@
+/*
+ * Copyright Strimzi authors.
+ * License: Apache License 2.0 (see the file LICENSE or http://apache.org/licenses/LICENSE-2.0.html).
+ */
+package io.strimzi.operator.common.featuregates;
+
+import io.strimzi.operator.common.InvalidConfigurationException;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+import static java.util.Arrays.asList;
+
+/**
+ * Class for handling the configuration of feature gates
+ */
+public class FeatureGates {
+    /* test */ static final FeatureGates NONE = new FeatureGates("");
+
+    // The `DummyFeatureGate` is kept as a template on how new feature gate should be added
+    // Once we don't have any other feature gate supported, code for `DummyFeatureGate` should be un-commented
+    // private static final String DUMMY_FEATURE_GATE = "DummyFeatureGate";
+
+    // Enables the usage of Server Side Apply
+    private static final String SERVER_SIDE_APPLY_PHASE_1 = "ServerSideApplyPhase1";
+    // Enables the usage of Buildah in Connect Build
+    private static final String USE_CONNECT_BUILD_WITH_BUILDAH = "UseConnectBuildWithBuildah";
+    // Enables background deletion propagation when rolling pods
+    private static final String USE_BACKGROUND_POD_DELETION = "UseBackgroundPodDeletion";
+
+    // When adding new feature gates, do not forget to add them to allFeatureGates(), toString(), equals(), and `hashCode() methods
+    private final FeatureGate serverSideApplyPhase1 = new FeatureGate(SERVER_SIDE_APPLY_PHASE_1, true);
+    // private final FeatureGate dummyFeatureGate = new FeatureGate(DUMMY_FEATURE_GATE, false);
+    private final FeatureGate useConnectBuildWithBuildah = new FeatureGate(USE_CONNECT_BUILD_WITH_BUILDAH, true);
+    private final FeatureGate useBackgroundPodDeletion = new FeatureGate(USE_BACKGROUND_POD_DELETION, false);
+
+    /**
+     * Constructs the feature gates configuration.
+     *
+     * @param featureGateConfig String with comma separated list of enabled or disabled feature gates
+     */
+    public FeatureGates(String featureGateConfig) {
+        if (featureGateConfig != null && !featureGateConfig.trim().isEmpty()) {
+            List<String> featureGates;
+
+            if (featureGateConfig.matches("(\\s*[+-][a-zA-Z0-9]+\\s*,)*\\s*[+-][a-zA-Z0-9]+\\s*")) {
+                featureGates = asList(featureGateConfig.trim().split("\\s*,+\\s*"));
+            } else {
+                throw new InvalidConfigurationException(featureGateConfig + " is not a valid feature gate configuration");
+            }
+
+            for (String featureGate : featureGates) {
+                boolean value = '+' == featureGate.charAt(0);
+                featureGate = featureGate.substring(1);
+
+                switch (featureGate) {
+    //                case DUMMY_FEATURE_GATE:
+    //                    setValueOnlyOnce(dummyFeatureGate, value);
+    //                    break;
+                    case SERVER_SIDE_APPLY_PHASE_1:
+                        setValueOnlyOnce(serverSideApplyPhase1, value);
+                        break;
+                    case USE_CONNECT_BUILD_WITH_BUILDAH:
+                        setValueOnlyOnce(useConnectBuildWithBuildah, value);
+                        break;
+                    case USE_BACKGROUND_POD_DELETION:
+                        setValueOnlyOnce(useBackgroundPodDeletion, value);
+                        break;
+                    default:
+                        throw new InvalidConfigurationException("Unknown feature gate " + featureGate + " found in the configuration");
+                }
+            }
+
+            validateInterDependencies();
+        }
+    }
+
+    /**
+     * Validates any dependencies between various feature gates. When the dependencies are not satisfied,
+     * InvalidConfigurationException is thrown.
+     */
+    private void validateInterDependencies()    {
+        // There are currently no interdependencies between different feature gates.
+        // But we keep this method as these might happen again in the future.
+    }
+
+    /**
+     * Sets the feature gate value if it was not set yet. But if it is already set, then it throws an exception. This
+     * helps to ensure that each feature gate is configured always only once.
+     *
+     * @param gate  Feature gate which is being configured
+     * @param value Value which should be set
+     */
+    private void setValueOnlyOnce(FeatureGate gate, boolean value) {
+        if (gate.isSet()) {
+            throw new InvalidConfigurationException("Feature gate " + gate.getName() + " is configured multiple times");
+        }
+
+        gate.setValue(value);
+    }
+
+    // public boolean dummyFeatureGateEnabled() {
+    //    return dummyFeatureGate.isEnabled();
+    // }
+
+    /**
+     * Checks if the ServerSideApplyPhase1 feature gate is enabled.
+     *
+     * @return  Returns true when the ServerSideApplyPhase1 feature gate is enabled
+     */
+    public boolean serverSideApplyPhase1Enabled() {
+        return serverSideApplyPhase1.isEnabled();
+    }
+
+    /**
+     * Checks if the UseConnectBuildWithBuildah feature gate is enabled.
+     *
+     * @return  Returns if `UseConnectBuildWithBuildah` is enabled or not.
+     */
+    public boolean useConnectBuildWithBuildahEnabled() {
+        return useConnectBuildWithBuildah.isEnabled();
+    }
+
+    /**
+     * Checks if the UseBackgroundPodDeletion feature gate is enabled.
+     *
+     * @return  Returns true when the UseBackgroundPodDeletion feature gate is enabled
+     */
+    public boolean useBackgroundPodDeletionEnabled() {
+        return useBackgroundPodDeletion.isEnabled();
+    }
+
+    /**
+     * Returns a list of all Feature gates. Used for testing.
+     *
+     * @return  List of all Feature Gates
+     */
+    /*test*/ List<FeatureGate> allFeatureGates()  {
+        return List.of(
+        //  dummyFeatureGate
+            serverSideApplyPhase1,
+            useConnectBuildWithBuildah,
+            useBackgroundPodDeletion
+        );
+    }
+
+    @Override
+    public String toString() {
+        return "FeatureGates(" +
+    //      "DummyFeatureGate=" + dummyFeatureGate.isEnabled() +
+            "ServerSideApplyPhase1=" + serverSideApplyPhase1.isEnabled() + ", " +
+            "UseConnectBuildWithBuildah=" + useConnectBuildWithBuildah.isEnabled() + ", " +
+            "UseBackgroundPodDeletion=" + useBackgroundPodDeletion.isEnabled() +
+            ")";
+    }
+
+    /**
+     * Generates the environment variable value for configuring feature gates in other operators.
+     *
+     * @return  Generates the value for the environment variable that can be passed to the other operators to configure
+     *          the feature gates exactly as they are set in this instance.
+     */
+    public String toEnvironmentVariable()   {
+        List<String> gateSettings = new ArrayList<>();
+
+        for (FeatureGate gate : allFeatureGates())  {
+            if (gate.isEnabledByDefault() && !gate.isEnabled()) {
+                // It is enabled by default but it is disabled now => we need to disable it
+                gateSettings.add("-" + gate.getName());
+            } else if (!gate.isEnabledByDefault() && gate.isEnabled()) {
+                // It is disabled by default but it is enabled now => we need to disable it
+                gateSettings.add("+" + gate.getName());
+            }
+        }
+
+        return String.join(",", gateSettings);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)  {
+            return true;
+        } else if (o == null || getClass() != o.getClass()) {
+            return false;
+        } else {
+            FeatureGates other = (FeatureGates) o;
+            // return Objects.equals(dummyFeatureGate, other.dummyFeatureGate)
+            return Objects.equals(serverSideApplyPhase1, other.serverSideApplyPhase1)
+                && Objects.equals(useConnectBuildWithBuildah, other.useConnectBuildWithBuildah)
+                && Objects.equals(useBackgroundPodDeletion, other.useBackgroundPodDeletion);
+        }
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(serverSideApplyPhase1, useConnectBuildWithBuildah, useBackgroundPodDeletion);
+    }
+
+    /**
+     * Feature gate class represents individual feature fate
+     */
+    static class FeatureGate {
+        private final String name;
+        private final boolean defaultValue;
+        private Boolean value = null;
+
+        /**
+         * Feature fate constructor
+         *
+         * @param name          Name of the feature gate
+         * @param defaultValue  Default value of the feature gate
+         */
+        FeatureGate(String name, boolean defaultValue) {
+            this.name = name;
+            this.defaultValue = defaultValue;
+        }
+
+        /**
+         * Gets the name of the feature gate.
+         *
+         * @return  The name of the feature gate
+         */
+        public String getName() {
+            return name;
+        }
+
+        /**
+         * Checks if the value for this feature gate is already set.
+         *
+         * @return  Returns true if the value for this feature gate is already set or false if it is still null
+         */
+        public boolean isSet() {
+            return value != null;
+        }
+
+        /**
+         * Sets the value of the feature gate
+         *
+         * @param value Value of the feature gate
+         */
+        public void setValue(boolean value) {
+            this.value = value;
+        }
+
+        /**
+         * Checks if the feature gate is enabled.
+         *
+         * @return  True if the feature gate is enabled. False otherwise.
+         */
+        public boolean isEnabled() {
+            return value == null ? defaultValue : value;
+        }
+
+        /**
+         * Checks if this feature gate is enabled by default.
+         *
+         * @return  Returns True if this feature gate is enabled by default. False otherwise.
+         */
+        public boolean isEnabledByDefault() {
+            return defaultValue;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o)  {
+                return true;
+            } else if (o == null || getClass() != o.getClass()) {
+                return false;
+            } else {
+                FeatureGate other = (FeatureGate) o;
+                return defaultValue == other.defaultValue && Objects.equals(name, other.name) && Objects.equals(value, other.value);
+            }
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(name, defaultValue, value);
+        }
+    }
+}
