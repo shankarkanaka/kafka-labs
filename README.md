@@ -12,7 +12,6 @@ Step-by-step guide to deploy Apache Kafka on Kubernetes using the [Strimzi Opera
 
 | File | Purpose |
 |------|---------|
-| `strimzi.txt` | Strimzi operator install output (reference) |
 | `kafka-namespace.yaml` | Kafka namespace definition |
 | `kafka.yaml` | Single-node Kafka cluster (KRaft, 10Gi storage) |
 | `kafka-ui.yaml` | Kafka UI web interface (NodePort 30080) |
@@ -24,6 +23,7 @@ Step-by-step guide to deploy Apache Kafka on Kubernetes using the [Strimzi Opera
 | `recover-cluster.bat` | Full post-reboot recovery script |
 | `recreate-cluster.bat` | Recreate Kind cluster with port mappings |
 | `deploy-apps.bat` | Build and deploy producer/consumer/KEDA interactively |
+| `shutdown.bat` | Gracefully stop everything — workloads, Kind, Podman, Desktop |
 | `PODMAN-KUBERNETES.md` | Podman Desktop + Kind setup guide |
 | `KAFKA-APPS.md` | Producer, consumer and autoscaling guide |
 | `AUTOSCALING-DEMO.md` | Step-by-step autoscaling observation guide |
@@ -48,38 +48,6 @@ Install the Strimzi Cluster Operator using the official manifest:
 
 ```bash
 kubectl create -f https://strimzi.io/install/latest?namespace=kafka -n kafka
-```
-
-Expected output (saved in `strimzi.txt`):
-
-```
-configmap/strimzi-cluster-operator created
-clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-namespaced created
-customresourcedefinition.apiextensions.k8s.io/kafkaconnectors.kafka.strimzi.io created
-customresourcedefinition.apiextensions.k8s.io/kafkas.kafka.strimzi.io created
-customresourcedefinition.apiextensions.k8s.io/kafkatopics.kafka.strimzi.io created
-clusterrole.rbac.authorization.k8s.io/strimzi-kafka-broker created
-clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-global created
-rolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-entity-operator-delegation created
-customresourcedefinition.apiextensions.k8s.io/kafkausers.kafka.strimzi.io created
-rolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-leader-election created
-clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-kafka-broker-delegation created
-serviceaccount/strimzi-cluster-operator created
-clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-watched created
-clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-leader-election created
-customresourcedefinition.apiextensions.k8s.io/kafkamirrormaker2s.kafka.strimzi.io created
-customresourcedefinition.apiextensions.k8s.io/kafkarebalances.kafka.strimzi.io created
-customresourcedefinition.apiextensions.k8s.io/kafkanodepools.kafka.strimzi.io created
-clusterrole.rbac.authorization.k8s.io/strimzi-entity-operator created
-clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator created
-rolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-watched created
-customresourcedefinition.apiextensions.k8s.io/strimzipodsets.core.strimzi.io created
-customresourcedefinition.apiextensions.k8s.io/kafkaconnects.kafka.strimzi.io created
-rolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator created
-deployment.apps/strimzi-cluster-operator created
-clusterrole.rbac.authorization.k8s.io/strimzi-kafka-client created
-clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-kafka-client-delegation created
-customresourcedefinition.apiextensions.k8s.io/kafkabridges.kafka.strimzi.io created
 ```
 
 Verify the operator is running:

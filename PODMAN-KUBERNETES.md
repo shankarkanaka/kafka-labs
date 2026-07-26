@@ -592,6 +592,24 @@ kubectl port-forward svc/kafka-ui 8080:8080 -n kafka
 >
 > 💡 Always run `recover-cluster.bat` after any reboot — it is safe to run even when resources already exist.
 
+### Graceful Shutdown (stop everything)
+
+Use the shutdown script to stop all workloads, the Kind node, Podman machine and Podman Desktop cleanly in one go:
+
+```powershell
+.\shutdown.bat
+```
+
+Steps it performs:
+1. Scales producer and consumer deployments to 0
+2. Stops the Kind node container (`podman stop kafka-lab-control-plane`)
+3. Stops the Podman machine (`podman machine stop`)
+4. Quits Podman Desktop
+
+To resume later, run `.\recover-cluster.bat`.
+
+---
+
 ### Delete the Kind Cluster
 
 ```powershell
