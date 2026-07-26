@@ -1,0 +1,25 @@
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      # Kafka UI
+      - containerPort: 30080
+        hostPort: 30080
+        protocol: TCP
+      # Reserved for future NodePort services (add as needed)
+      - containerPort: 30081
+        hostPort: 30081
+        protocol: TCP
+      - containerPort: 30082
+        hostPort: 30082
+        protocol: TCP
+      - containerPort: 30083
+        hostPort: 30083
+        protocol: TCP
+      - containerPort: 30084
+        hostPort: 30084
+        protocol: TCP
+      - containerPort: 30085
+        hostPort: 30085
+        protocol: TCP

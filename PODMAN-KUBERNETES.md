@@ -142,9 +142,11 @@ kind v0.x.x go1.x.x windows/amd64
 
 ### Step 1 — Create a Kind cluster using Podman as the provider
 
+Use the `kind-config.yaml` file to create the cluster. This maps `NodePort 30080` on the Kind node to `localhost:30080` on Windows — required because Kind + Podman on Windows does not map ports automatically like Docker Desktop does.
+
 ```powershell
 $env:KIND_EXPERIMENTAL_PROVIDER = "podman"
-kind create cluster --name kafka-lab
+kind create cluster --name kafka-lab --config kind-config.yaml
 ```
 
 > ⏳ This takes 1–3 minutes. Kind pulls the node image and configures the cluster.
@@ -162,6 +164,12 @@ Set kubectl context to "kind-kafka-lab"
 You can now use your cluster with:
 kubectl cluster-info --context kind-kafka-lab
 ```
+
+> ⚠️ **Port mapping is set at cluster creation time.** If you already have a cluster without this config, you must delete and recreate it. Use the script:
+> ```powershell
+> .\recreate-cluster.bat
+> ```
+> Then run `.\recover-cluster.bat` to redeploy all Kafka resources.
 
 ### Step 2 — Verify the cluster is ready
 
@@ -342,13 +350,19 @@ kubectl port-forward svc/<service-name> <local-port>:<service-port> -n <namespac
 Example — access Kafka UI locally:
 
 ```powershell
+# NodePort — direct access, no port-forward needed
+http://localhost:30080
+```
+
+> 💡 The `kafka-ui` service uses `NodePort` on port `30080`. Kind maps this directly to `localhost:30080` — open it in your browser without any extra commands.
+
+**Port-forward (fallback, works on any cluster type):**
+
+```powershell
 kubectl port-forward svc/kafka-ui 8080:8080 -n kafka
 ```
 
 Then open: **http://localhost:8080**
-
-> 💡 `port-forward` is the recommended way to access services on Kind + Podman.
-> `LoadBalancer` type does **not** auto-assign IPs on local Kind clusters.
 
 ---
 
@@ -446,13 +460,26 @@ kubectl get pods -n kafka -o jsonpath="{..image}" | ForEach-Object { $_ -split "
 | Action | Podman Machine | Kind Node Container | Workload Images | Kafka Workloads |
 |--------|---------------|---------------------|-----------------|-----------------|
 | Quit Podman Desktop | ✅ Running | ✅ Running | ✅ Intact | ✅ Running |
-| `podman machine stop` | ⛔ Stopped | ⛔ Exited | ✅ Intact | ⛔ Suspended |
-| `podman machine start` | ✅ Running | ⚠️ Exited — must start manually | ✅ Intact | ⛔ Until node started |
+| `podman machine stop` (graceful) | ⛔ Stopped | ⛔ Exited cleanly | ✅ Intact | ⚠️ Usually preserved |
+| `podman machine start` | ✅ Running | ⚠️ Exited — must start manually | ✅ Intact | ⚠️ Check after node starts |
 | `podman start kafka-lab-control-plane` | ✅ Running | ✅ Running | ✅ Intact | ✅ Resumes |
 | `kind delete cluster` | ✅ Running | ❌ Deleted | ❌ Deleted | ❌ Deleted |
-| Windows reboot | ⛔ Stopped | ⛔ Exited | ✅ Intact | ⛔ Suspended |
+| Windows graceful restart | ⛔ Stopped | ⛔ Exited | ✅ Intact | ⚠️ Sometimes preserved |
+| Windows forced reboot / power loss | ⛔ Stopped | ⛔ Exited abruptly | ✅ Intact | ❌ Lost |
 
 > ⚠️ **The Kind node container does NOT auto-start** when the Podman machine restarts. You must start it manually with `podman start kafka-lab-control-plane`.
+
+#### Why K8s resources sometimes survive a restart
+
+Kind stores all cluster state in **etcd** inside the node container. Whether resources survive depends on how the node was stopped:
+
+| Shutdown type | etcd behaviour | K8s resources |
+|---------------|---------------|---------------|
+| `podman machine stop` (graceful) | ✅ Flushes to disk cleanly | ✅ Usually preserved |
+| Windows graceful restart | ⚠️ Depends on shutdown speed | ⚠️ Sometimes preserved |
+| Windows forced reboot / power loss | ❌ No time to flush | ❌ Lost |
+
+> 💡 The recovery script (`recover-cluster.bat`) handles both cases — it uses `kubectl apply` throughout, so if resources already exist they are left unchanged, and if they are missing they are recreated.
 
 ### Stop the Podman Machine (suspends everything)
 
@@ -554,14 +581,16 @@ kubectl port-forward svc/kafka-ui 8080:8080 -n kafka
 
 > ⚠️ **What persists vs what is lost after a reboot:**
 >
-> | Resource | Survives reboot? |
-> |----------|-----------------|
-> | Kind cluster existence | ✅ Yes |
-> | Strimzi Operator | ❌ No — redeploy |
-> | Kafka cluster | ❌ No — redeploy |
-> | Kafka UI | ❌ No — redeploy |
-> | Kafka Topics | ❌ No — redeploy |
-> | PVC data | ❌ No — lost with node |
+> | Resource | Graceful stop/restart | Forced reboot |
+> |----------|-----------------------|---------------|
+> | Kind cluster existence | ✅ Yes | ✅ Yes |
+> | Strimzi Operator | ⚠️ Usually preserved | ❌ Redeploy |
+> | Kafka cluster | ⚠️ Usually preserved | ❌ Redeploy |
+> | Kafka UI | ⚠️ Usually preserved | ❌ Redeploy |
+> | Kafka Topics | ⚠️ Usually preserved | ❌ Redeploy |
+> | PVC data | ⚠️ Usually preserved | ❌ Lost |
+>
+> 💡 Always run `recover-cluster.bat` after any reboot — it is safe to run even when resources already exist.
 
 ### Delete the Kind Cluster
 

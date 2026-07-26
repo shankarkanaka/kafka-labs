@@ -154,17 +154,15 @@ kubectl get pods,svc -n kafka -l app=kafka-ui
 
 ### Access Kafka UI
 
-**Docker Desktop (recommended):**
+The service uses `NodePort` type, accessible directly at:
 
 ```
-http://localhost:8080
+http://localhost:30080
 ```
 
-The service uses `LoadBalancer` type, which Docker Desktop maps to `localhost:8080`.
+No `port-forward` needed — Kind maps the node port directly to `localhost`.
 
-> **Note:** NodePort (`localhost:30080`) does not work reliably on Docker Desktop + WSL2. Use LoadBalancer on port 8080 instead.
-
-**Port-forward (works on any cluster):**
+**Port-forward (fallback, works on any cluster):**
 
 ```bash
 kubectl port-forward svc/kafka-ui 8080:8080 -n kafka
