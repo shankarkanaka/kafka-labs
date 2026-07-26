@@ -23,6 +23,7 @@ Step-by-step guide to deploy Apache Kafka on Kubernetes using the [Strimzi Opera
 | `k8s/` | Kubernetes manifests for producer, consumer and KEDA |
 | `recover-cluster.bat` | Full post-reboot recovery script |
 | `recreate-cluster.bat` | Recreate Kind cluster with port mappings |
+| `deploy-apps.bat` | Build and deploy producer/consumer/KEDA interactively |
 | `PODMAN-KUBERNETES.md` | Podman Desktop + Kind setup guide |
 | `KAFKA-APPS.md` | Producer, consumer and autoscaling guide |
 | `AUTOSCALING-DEMO.md` | Step-by-step autoscaling observation guide |

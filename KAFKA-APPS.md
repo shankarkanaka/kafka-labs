@@ -33,9 +33,38 @@ k8s/
 
 ---
 
-## Part 1: Build Docker Images
+## Part 1: Build and Deploy Using the Script (Recommended)
 
-Images must be built and loaded into the Kind cluster since it cannot pull from a local registry directly.
+Instead of running steps manually, use the interactive deploy script:
+
+```powershell
+.\deploy-apps.bat
+```
+
+The script will prompt:
+```
+Select what to deploy:
+  1. Consumer only
+  2. Producer only
+  3. All (Consumer + Producer + KEDA ScaledObject)
+
+Enter choice [1/2/3]:
+```
+
+It handles everything automatically:
+- ✅ Checks kubectl context
+- ✅ Installs KEDA if not already installed (option 3)
+- ✅ Builds the Docker image(s)
+- ✅ Loads image(s) into the Kind cluster
+- ✅ Deploys Kubernetes manifests
+- ✅ Waits for pods to be Running
+- ✅ Prints final status and log commands
+
+---
+
+## Part 2: Build Docker Images Manually
+
+If you prefer to run steps individually:
 
 ### Build the images
 
