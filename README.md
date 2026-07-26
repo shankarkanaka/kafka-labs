@@ -25,6 +25,7 @@ Step-by-step guide to deploy Apache Kafka on Kubernetes using the [Strimzi Opera
 | `recreate-cluster.bat` | Recreate Kind cluster with port mappings |
 | `PODMAN-KUBERNETES.md` | Podman Desktop + Kind setup guide |
 | `KAFKA-APPS.md` | Producer, consumer and autoscaling guide |
+| `AUTOSCALING-DEMO.md` | Step-by-step autoscaling observation guide |
 
 ---
 
