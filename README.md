@@ -15,8 +15,16 @@ Step-by-step guide to deploy Apache Kafka on Kubernetes using the [Strimzi Opera
 | `strimzi.txt` | Strimzi operator install output (reference) |
 | `kafka-namespace.yaml` | Kafka namespace definition |
 | `kafka.yaml` | Single-node Kafka cluster (KRaft, 10Gi storage) |
-| `kafka-ui.yaml` | Kafka UI web interface |
+| `kafka-ui.yaml` | Kafka UI web interface (NodePort 30080) |
 | `kafka-topic.yaml` | Example topic with 10 partitions |
+| `kind-config.yaml` | Kind cluster config with NodePort mappings |
+| `producer/` | Python Kafka producer app + Dockerfile |
+| `consumer/` | Python Kafka consumer app + Dockerfile |
+| `k8s/` | Kubernetes manifests for producer, consumer and KEDA |
+| `recover-cluster.bat` | Full post-reboot recovery script |
+| `recreate-cluster.bat` | Recreate Kind cluster with port mappings |
+| `PODMAN-KUBERNETES.md` | Podman Desktop + Kind setup guide |
+| `KAFKA-APPS.md` | Producer, consumer and autoscaling guide |
 
 ---
 

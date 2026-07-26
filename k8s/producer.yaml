@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-producer
+  namespace: kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-producer
+  template:
+    metadata:
+      labels:
+        app: kafka-producer
+    spec:
+      containers:
+        - name: kafka-producer
+          image: localhost/kafka-producer:latest
+          imagePullPolicy: Never          # use locally built image in Kind
+          env:
+            - name: BOOTSTRAP_SERVERS
+              value: my-cluster-kafka-bootstrap.kafka.svc:9092
+            - name: TOPIC
+              value: my-topic
+            - name: INTERVAL_SEC
+              value: "2"                  # produce a message every 2 seconds
+            - name: MESSAGE_COUNT
+              value: "0"                  # 0 = run forever
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi

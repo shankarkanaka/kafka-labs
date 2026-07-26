@@ -56,19 +56,32 @@ if !READY!==0 (
 )
 echo.
 
-:: ── Step 5: Create Kafka namespace ───────────────────────────
-echo [5/11] Applying Kafka namespace...
+:: ── Step 5: Install KEDA ─────────────────────────────────────
+echo [5/11] Installing KEDA (if not already installed)...
+kubectl get namespace keda >nul 2>&1
+if errorlevel 1 (
+    helm repo add kedacore https://kedacore.github.io/charts 2>nul
+    helm repo update 2>nul
+    helm install keda kedacore/keda --namespace keda --create-namespace
+    echo       KEDA installed.
+) else (
+    echo       KEDA already installed, skipping.
+)
+echo.
+
+:: ── Step 6: Create Kafka namespace ───────────────────────────
+echo [6/11] Applying Kafka namespace...
 kubectl apply -f kafka-namespace.yaml
 echo.
 
-:: ── Step 6: Install Strimzi Operator ─────────────────────────
-echo [6/11] Installing Strimzi Operator...
+:: ── Step 7: Install Strimzi Operator ─────────────────────────
+echo [7/11] Installing Strimzi Operator...
 kubectl apply -f https://strimzi.io/install/latest?namespace=kafka -n kafka 2>nul
 echo       (Warnings about existing resources are normal on re-deploy)
 echo.
 
-:: ── Step 7: Wait for Strimzi operator to be Running ──────────
-echo [7/11] Waiting for Strimzi operator pod to be Running (up to 3 minutes)...
+:: ── Step 8: Wait for Strimzi operator to be Running ──────────
+echo [8/13] Waiting for Strimzi operator pod to be Running (up to 3 minutes)...
 set READY=0
 for /L %%i in (1,1,18) do (
     if !READY!==0 (
@@ -89,14 +102,14 @@ if !READY!==0 (
 )
 echo.
 
-:: ── Step 8: Deploy Kafka cluster and Kafka UI ────────────────
-echo [8/11] Deploying Kafka cluster and Kafka UI...
+:: ── Step 9: Deploy Kafka cluster and Kafka UI ────────────────
+echo [9/13] Deploying Kafka cluster and Kafka UI...
 kubectl apply -f kafka.yaml
 kubectl apply -f kafka-ui.yaml
 echo.
 
-:: ── Step 9: Wait for Kafka cluster to be Ready ───────────────
-echo [9/11] Waiting for Kafka cluster to be Ready (up to 5 minutes)...
+:: ── Step 10: Wait for Kafka cluster to be Ready ──────────────
+echo [10/13] Waiting for Kafka cluster to be Ready (up to 5 minutes)...
 set READY=0
 for /L %%i in (1,1,30) do (
     if !READY!==0 (
@@ -119,23 +132,40 @@ if !READY!==0 (
 )
 echo.
 
-:: ── Step 10: Deploy Kafka topic ──────────────────────────────
-echo [10/11] Deploying Kafka topic...
+:: ── Step 11: Deploy Kafka topic ──────────────────────────────
+echo [11/13] Deploying Kafka topic...
 kubectl apply -f kafka-topic.yaml
 echo.
 
-:: ── Step 11: Verify all resources ────────────────────────────
-echo [11/11] Verifying deployed resources...
+:: ── Step 12: Deploy producer and consumer apps ───────────────
+echo [12/13] Deploying Kafka producer and consumer apps...
+if exist k8s\producer.yaml (
+    kubectl apply -f k8s/producer.yaml
+    kubectl apply -f k8s/consumer.yaml
+    kubectl apply -f k8s/keda-scaledobject.yaml
+    echo       Producer, consumer and KEDA ScaledObject deployed.
+) else (
+    echo       Skipping — k8s\producer.yaml not found.
+    echo       See KAFKA-APPS.md to build and load images first.
+)
+echo.
+
+:: ── Step 13: Verify all resources ────────────────────────────
+echo [13/13] Verifying deployed resources...
 echo.
 kubectl get kafka,kafkanodepool,kafkatopic,pods,svc,pvc -n kafka
+echo.
+kubectl get scaledobject -n kafka 2>nul
 echo.
 
 :: ── Done ─────────────────────────────────────────────────────
 echo ============================================================
 echo   Recovery complete!
 echo.
-echo   Kafka UI is available at: http://localhost:30080
-echo   Open it in your browser directly - no port-forward needed.
+echo   Kafka UI        : http://localhost:30080
+echo   Producer logs   : kubectl logs -n kafka deployment/kafka-producer -f
+echo   Consumer logs   : kubectl logs -n kafka deployment/kafka-consumer -f
+echo   Autoscaling     : kubectl get scaledobject -n kafka
 echo ============================================================
 echo.
 pause
