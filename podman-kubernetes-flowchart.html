@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Podman Desktop — Setup & Lifecycle Flowchart</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    background: #ffffff;
+    color: #1f2328;
+    padding: 32px 16px 48px;
+  }
+  .page { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { color: #57606a; font-size: 13px; margin-bottom: 32px; }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #57606a;
+    margin: 28px 0 10px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .flow { display: flex; flex-direction: column; gap: 0; }
+  .row { display: flex; align-items: stretch; gap: 0; }
+
+  .node {
+    flex: 1;
+    background: #f7f8fa;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 10px 14px;
+    text-align: center;
+    position: relative;
+  }
+  .node.accent  { background: #eff6ff; border-color: #93c5fd; }
+  .node.success { background: #f0fdf4; border-color: #86efac; }
+  .node.warn    { background: #fffbeb; border-color: #fcd34d; }
+  .node.danger  { background: #fff1f2; border-color: #fca5a5; }
+  .node.purple  { background: #faf5ff; border-color: #c4b5fd; }
+  .node.muted   { background: #f7f8fa; border-color: #e5e7eb; color: #57606a; }
+
+  .node-title { font-weight: 600; font-size: 13px; }
+  .node-cmd {
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 11px;
+    background: rgba(0,0,0,.05);
+    border-radius: 3px;
+    padding: 2px 6px;
+    margin-top: 4px;
+    display: inline-block;
+    color: #1f2328;
+  }
+  .node-note { font-size: 11px; color: #57606a; margin-top: 3px; }
+
+  .arrow-down {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 28px;
+    color: #57606a;
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .lifecycle-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+  .lifecycle-table th {
+    background: #f7f8fa;
+    border: 1px solid #e5e7eb;
+    padding: 7px 10px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+  }
+  .lifecycle-table td {
+    border: 1px solid #e5e7eb;
+    padding: 7px 10px;
+    vertical-align: middle;
+  }
+  .lifecycle-table tr:nth-child(even) td { background: #f7f8fa; }
+  .badge {
+    display: inline-block;
+    border-radius: 4px;
+    padding: 1px 7px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge.ok  { background: #dcfce7; color: #15803d; }
+  .badge.off { background: #fee2e2; color: #b91c1c; }
+  .badge.sus { background: #fef9c3; color: #92400e; }
+
+  .arch {
+    background: #f7f8fa;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 12px;
+    line-height: 2;
+    margin-top: 8px;
+  }
+  .arch .l0 { color: #1f2328; font-weight: 700; }
+  .arch .l1 { color: #3b82d4; }
+  .arch .l2 { color: #7c5cd8; }
+  .arch .l3 { color: #15803d; }
+  .arch .l4 { color: #b45309; }
+  .arch .tag {
+    display: inline-block;
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    font-size: 10px;
+    background: #e5e7eb;
+    color: #57606a;
+    border-radius: 3px;
+    padding: 0 5px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  .divider { border: none; border-top: 1px solid #e5e7eb; margin: 28px 0; }
+
+  footer {
+    margin-top: 40px;
+    padding-top: 12px;
+    border-top: 1px solid #e5e7eb;
+    text-align: center;
+    font-size: 12px;
+    color: #57606a;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Podman Desktop — Setup &amp; Lifecycle</h1>
+  <p class="subtitle">Visual guide to installation, cluster creation, daily use, and teardown</p>
+
+  <!-- SETUP FLOW -->
+  <div class="section-label">Part 1–3 · One-time Setup</div>
+  <div class="flow">
+    <div class="row"><div class="node accent">
+      <div class="node-title">1. Install Podman Desktop</div>
+      <div class="node-cmd">podman-desktop-installer.exe</div>
+      <div class="node-note">Installs Podman CLI + WSL2 integration</div>
+    </div></div>
+    <div class="arrow-down">↓</div>
+    <div class="row"><div class="node accent">
+      <div class="node-title">2. Init &amp; Start Podman Machine</div>
+      <div class="node-cmd">podman machine init</div>
+      <div class="node-cmd">podman machine start</div>
+      <div class="node-note">Creates a WSL2 VM to run containers</div>
+    </div></div>
+    <div class="arrow-down">↓</div>
+    <div class="row"><div class="node accent">
+      <div class="node-title">3. Install Kind</div>
+      <div class="node-cmd">winget install Kubernetes.kind</div>
+      <div class="node-note">Open a new terminal after install</div>
+    </div></div>
+    <div class="arrow-down">↓</div>
+    <div class="row"><div class="node success">
+      <div class="node-title">4. Create Kind Cluster</div>
+      <div class="node-cmd">$env:KIND_EXPERIMENTAL_PROVIDER = "podman"</div>
+      <div class="node-cmd">kind create cluster --name kafka-lab</div>
+      <div class="node-note">Done once — cluster persists across reboots</div>
+    </div></div>
+    <div class="arrow-down">↓</div>
+    <div class="row"><div class="node success">
+      <div class="node-title">5. Set kubectl Context</div>
+      <div class="node-cmd">kubectl config use-context kind-kafka-lab</div>
+      <div class="node-note">Optionally set a default namespace</div>
+    </div></div>
+    <div class="arrow-down">↓</div>
+    <div class="row"><div class="node purple">
+      <div class="node-title">6. Deploy Workloads</div>
+      <div class="node-cmd">kubectl apply -f kafka.yaml</div>
+      <div class="node-note">Strimzi, Kafka, Kafka UI, Topics → see README.md</div>
+    </div></div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- DAILY USE FLOW -->
+  <div class="section-label">Daily Use · After a Reboot or Machine Stop</div>
+  <div class="flow">
+    <div class="row"><div class="node warn">
+      <div class="node-title">Windows Reboot / Machine Stopped</div>
+      <div class="node-note">Podman machine is stopped — Kind cluster is suspended</div>
+    </div></div>
+    <div class="arrow-down">↓</div>
+    <div class="row"><div class="node accent">
+      <div class="node-title">Start Podman Machine</div>
+      <div class="node-cmd">podman machine start</div>
+    </div></div>
+    <div class="arrow-down">↓</div>
+    <div class="row"><div class="node accent">
+      <div class="node-title">Switch kubectl Context</div>
+      <div class="node-cmd">kubectl config use-context kind-kafka-lab</div>
+    </div></div>
+    <div class="arrow-down">↓</div>
+    <div class="row"><div class="node success">
+      <div class="node-title">Verify Node is Ready</div>
+      <div class="node-cmd">kubectl get nodes</div>
+      <div class="node-note">kafka-lab-control-plane → Ready</div>
+    </div></div>
+    <div class="arrow-down">↓</div>
+    <div class="row"><div class="node purple">
+      <div class="node-title">Resume Work</div>
+      <div class="node-note">All pods, services and PVCs are restored automatically</div>
+    </div></div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ARCHITECTURE -->
+  <div class="section-label">Component Architecture</div>
+  <div class="arch">
+    <div class="l0">Windows Host <span class="tag">your laptop</span></div>
+    <div>├── <span class="l1">Podman Desktop <span class="tag">GUI only — quitting stops nothing</span></span></div>
+    <div>└── <span class="l1">Podman Machine (WSL2 VM) <span class="tag">podman machine start/stop</span></span></div>
+    <div>&nbsp;&nbsp;&nbsp;&nbsp;└── <span class="l2">Kind Cluster: kafka-lab <span class="tag">kind create/delete cluster</span></span></div>
+    <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── <span class="l3">Namespace: kafka <span class="tag">kubectl create namespace</span></span></div>
+    <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── <span class="l4">Strimzi Operator</span></div>
+    <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── <span class="l4">Kafka Cluster (my-cluster)</span></div>
+    <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── <span class="l4">Kafka UI</span></div>
+    <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── <span class="l4">KafkaTopic (my-topic)</span></div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- LIFECYCLE TABLE -->
+  <div class="section-label">Lifecycle at a Glance</div>
+  <table class="lifecycle-table">
+    <thead>
+      <tr>
+        <th>Action</th>
+        <th>Podman Machine</th>
+        <th>Kind Cluster</th>
+        <th>Kafka / Workloads</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Quit Podman Desktop</td>
+        <td><span class="badge ok">Running</span></td>
+        <td><span class="badge ok">Running</span></td>
+        <td><span class="badge ok">Running</span></td>
+      </tr>
+      <tr>
+        <td><code>podman machine stop</code></td>
+        <td><span class="badge off">Stopped</span></td>
+        <td><span class="badge sus">Suspended</span></td>
+        <td><span class="badge sus">Suspended</span></td>
+      </tr>
+      <tr>
+        <td><code>podman machine start</code></td>
+        <td><span class="badge ok">Running</span></td>
+        <td><span class="badge ok">Resumes</span></td>
+        <td><span class="badge ok">Resumes</span></td>
+      </tr>
+      <tr>
+        <td>Windows reboot</td>
+        <td><span class="badge off">Stopped</span></td>
+        <td><span class="badge sus">Suspended</span></td>
+        <td><span class="badge sus">Suspended</span></td>
+      </tr>
+      <tr>
+        <td><code>kind delete cluster</code></td>
+        <td><span class="badge ok">Running</span></td>
+        <td><span class="badge off">Deleted</span></td>
+        <td><span class="badge off">Deleted</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr class="divider">
+
+  <!-- TEARDOWN FLOW -->
+  <div class="section-label">Teardown · Full Cleanup</div>
+  <div class="flow">
+    <div class="row"><div class="node danger">
+      <div class="node-title">1. Delete Kafka Resources</div>
+      <div class="node-cmd">kubectl delete -f kafka-topic.yaml</div>
+      <div class="node-cmd">kubectl delete -f kafka-ui.yaml</div>
+      <div class="node-cmd">kubectl delete -f kafka.yaml</div>
+    </div></div>
+    <div class="arrow-down">↓</div>
+    <div class="row"><div class="node danger">
+      <div class="node-title">2. Uninstall Strimzi Operator</div>
+      <div class="node-cmd">kubectl delete -f https://strimzi.io/install/latest?namespace=kafka -n kafka</div>
+    </div></div>
+    <div class="arrow-down">↓</div>
+    <div class="row"><div class="node danger">
+      <div class="node-title">3. Delete Kind Cluster</div>
+      <div class="node-cmd">kind delete cluster --name kafka-lab</div>
+    </div></div>
+    <div class="arrow-down">↓</div>
+    <div class="row"><div class="node danger">
+      <div class="node-title">4. Stop Podman Machine</div>
+      <div class="node-cmd">podman machine stop</div>
+    </div></div>
+  </div>
+
+  <footer>Made with IBM Bob</footer>
+</div>
+</body>
+</html>
