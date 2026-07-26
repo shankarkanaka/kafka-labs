@@ -23,7 +23,7 @@ spec:
             - name: TOPIC
               value: my-topic
             - name: INTERVAL_SEC
-              value: "2"                  # produce a message every 2 seconds
+              value: "0.1"               # produce 10 messages per second to build lag
             - name: MESSAGE_COUNT
               value: "0"                  # 0 = run forever
           resources:

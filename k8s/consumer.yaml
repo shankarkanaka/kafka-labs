@@ -26,6 +26,8 @@ spec:
               value: my-consumer-group
             - name: AUTO_OFFSET_RESET
               value: earliest
+            - name: PROCESSING_DELAY_SEC
+              value: "5"                 # simulate slow processing to build lag
           resources:
             requests:
               cpu: 100m

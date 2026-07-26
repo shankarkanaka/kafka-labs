@@ -12,10 +12,11 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ── Config from environment variables ────────────────────────
-BOOTSTRAP_SERVERS  = os.getenv("BOOTSTRAP_SERVERS", "localhost:9092")
-TOPIC              = os.getenv("TOPIC", "my-topic")
-GROUP_ID           = os.getenv("GROUP_ID", "my-consumer-group")
-AUTO_OFFSET_RESET  = os.getenv("AUTO_OFFSET_RESET", "earliest")
+BOOTSTRAP_SERVERS    = os.getenv("BOOTSTRAP_SERVERS", "localhost:9092")
+TOPIC                = os.getenv("TOPIC", "my-topic")
+GROUP_ID             = os.getenv("GROUP_ID", "my-consumer-group")
+AUTO_OFFSET_RESET    = os.getenv("AUTO_OFFSET_RESET", "earliest")
+PROCESSING_DELAY_SEC = float(os.getenv("PROCESSING_DELAY_SEC", "0"))  # 0 = no delay
 
 # ── Graceful shutdown ─────────────────────────────────────────
 running = True

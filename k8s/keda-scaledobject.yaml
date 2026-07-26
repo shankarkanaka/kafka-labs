@@ -16,5 +16,5 @@ spec:
         bootstrapServers: my-cluster-kafka-bootstrap.kafka.svc:9092
         consumerGroup: my-consumer-group
         topic: my-topic
-        lagThreshold: "10"   # scale up when consumer lag exceeds 10 messages
+        lagThreshold: "5"    # scale up when consumer lag exceeds 5 messages
         offsetResetPolicy: earliest
