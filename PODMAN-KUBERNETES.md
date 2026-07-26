@@ -383,11 +383,17 @@ standard (default)   rancher.io/local-path   Delete          WaitForFirstConsume
 Podman Desktop is just a GUI frontend. The Podman machine and Kind cluster run independently underneath it:
 
 ```
-Windows
-└── Podman Desktop (UI — just a viewer/manager)
-└── Podman Machine (WSL2 VM — runs independently)
-    └── Kind cluster (containers inside the VM)
-        └── Your Kubernetes workloads (Kafka, Strimzi, etc.)
+Windows Host
+├── Podman Desktop        (UI only — quitting stops nothing)
+└── Podman Machine (WSL2 VM)   ← Podman CLI talks to this
+    ├── Image Store       (kindest/node image stored here)
+    └── Kind Cluster: kafka-lab   (node runs as a container)
+        └── Kind Node Container
+            ├── containerd  (pulls workload images inside here)
+            └── Namespace: kafka
+                ├── Strimzi Operator image
+                ├── Kafka image
+                └── Kafka UI image
 ```
 
 ### What Podman Desktop Manages
@@ -399,15 +405,51 @@ Windows
 
 > 💡 **Quitting Podman Desktop stops nothing.** Everything keeps running as background processes.
 
+### Where to Run Commands
+
+Podman CLI is installed on **Windows**, not inside WSL. Always run `podman`, `kind`, and `kubectl` from PowerShell or cmd — never from the WSL terminal.
+
+| Terminal | `podman` | `kubectl` | `kind` |
+|----------|----------|-----------|--------|
+| **PowerShell / cmd (Windows)** | ✅ Yes | ✅ Yes | ✅ Yes |
+| **WSL2 shell (Ubuntu)** | ❌ No — wrong side | ✅ If installed | ❌ No |
+
+> If you open a WSL terminal and run `podman`, you will get `Command 'podman' not found`. This is expected — the Podman CLI lives on the Windows side, not inside the VM.
+
+### Where Container Images Are Downloaded
+
+When you deploy workloads to the Kind cluster, images are **not** downloaded to the Windows filesystem directly. There are two levels:
+
+| Level | What is stored | Where |
+|-------|---------------|-------|
+| **Level 1 — Podman Machine** | `kindest/node` image (the cluster node itself) | Inside WSL2 VM image store |
+| **Level 2 — Kind Node Container** | Workload images (Strimzi, Kafka, Kafka UI) | Inside the Kind node, pulled by `containerd` |
+
+The Windows filesystem only holds the WSL2 virtual disk file (`.vhdx`) — all container data lives inside it.
+
+Check the Kind node container running in Podman:
+
+```powershell
+podman ps
+```
+
+Check images pulled inside the Kind node:
+
+```powershell
+kubectl get pods -n kafka -o jsonpath="{..image}" | ForEach-Object { $_ -split " " } | Sort-Object -Unique
+```
+
+> ⚠️ **If you run `kind delete cluster`**, the Kind node container is deleted and all workload images inside it are lost. They will be re-pulled from the internet on next deploy.
+
 ### Lifecycle at a Glance
 
-| Action | Podman Machine | Kind Cluster | Kafka / Workloads |
-|--------|---------------|--------------|-------------------|
-| Quit Podman Desktop | ✅ Still running | ✅ Still running | ✅ Still running |
-| `podman machine stop` | ⛔ Stopped | ⛔ Suspended | ⛔ Suspended |
-| `podman machine start` | ✅ Running | ✅ Resumes | ✅ Resumes |
-| `kind delete cluster` | ✅ Still running | ❌ Deleted | ❌ Deleted |
-| Windows reboot | ⛔ Stopped | ⛔ Suspended | ⛔ Suspended |
+| Action | Podman Machine | Kind Cluster | Workload Images | Kafka Workloads |
+|--------|---------------|--------------|-----------------|-----------------|
+| Quit Podman Desktop | ✅ Running | ✅ Running | ✅ Intact | ✅ Running |
+| `podman machine stop` | ⛔ Stopped | ⛔ Suspended | ✅ Intact | ⛔ Suspended |
+| `podman machine start` | ✅ Running | ✅ Resumes | ✅ Intact | ✅ Resumes |
+| `kind delete cluster` | ✅ Running | ❌ Deleted | ❌ Deleted | ❌ Deleted |
+| Windows reboot | ⛔ Stopped | ⛔ Suspended | ✅ Intact | ⛔ Suspended |
 
 ### Stop the Podman Machine (suspends everything)
 
@@ -486,12 +528,14 @@ kubectl cluster-info
 
 | Problem | Fix |
 |---------|-----|
-| `podman` not recognized | Open a new terminal after install |
+| `podman` not recognized in PowerShell | Open a new terminal after install |
+| `podman` not found inside WSL terminal | Expected — run `podman` from PowerShell/cmd, not WSL |
 | `kind` not recognized | Open a new terminal after `winget install` |
 | Podman machine won't start | Run `podman machine init` first |
 | `LoadBalancer` service stuck in `<pending>` | Use `kubectl port-forward` instead |
 | Kind cluster not reachable after reboot | Run `podman machine start` then `kubectl config use-context kind-kafka-lab` |
 | Wrong kubectl context | Run `kubectl config use-context kind-kafka-lab` |
+| Images re-downloaded after cluster recreate | Expected — `kind delete cluster` removes the Kind node and its images |
 
 ---
 
