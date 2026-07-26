@@ -443,13 +443,16 @@ kubectl get pods -n kafka -o jsonpath="{..image}" | ForEach-Object { $_ -split "
 
 ### Lifecycle at a Glance
 
-| Action | Podman Machine | Kind Cluster | Workload Images | Kafka Workloads |
-|--------|---------------|--------------|-----------------|-----------------|
+| Action | Podman Machine | Kind Node Container | Workload Images | Kafka Workloads |
+|--------|---------------|---------------------|-----------------|-----------------|
 | Quit Podman Desktop | ✅ Running | ✅ Running | ✅ Intact | ✅ Running |
-| `podman machine stop` | ⛔ Stopped | ⛔ Suspended | ✅ Intact | ⛔ Suspended |
-| `podman machine start` | ✅ Running | ✅ Resumes | ✅ Intact | ✅ Resumes |
+| `podman machine stop` | ⛔ Stopped | ⛔ Exited | ✅ Intact | ⛔ Suspended |
+| `podman machine start` | ✅ Running | ⚠️ Exited — must start manually | ✅ Intact | ⛔ Until node started |
+| `podman start kafka-lab-control-plane` | ✅ Running | ✅ Running | ✅ Intact | ✅ Resumes |
 | `kind delete cluster` | ✅ Running | ❌ Deleted | ❌ Deleted | ❌ Deleted |
-| Windows reboot | ⛔ Stopped | ⛔ Suspended | ✅ Intact | ⛔ Suspended |
+| Windows reboot | ⛔ Stopped | ⛔ Exited | ✅ Intact | ⛔ Suspended |
+
+> ⚠️ **The Kind node container does NOT auto-start** when the Podman machine restarts. You must start it manually with `podman start kafka-lab-control-plane`.
 
 ### Stop the Podman Machine (suspends everything)
 
@@ -457,23 +460,108 @@ kubectl get pods -n kafka -o jsonpath="{..image}" | ForEach-Object { $_ -split "
 podman machine stop
 ```
 
-### Restart the Podman Machine (resumes everything)
+### Restart the Podman Machine
 
 ```powershell
 podman machine start
 ```
 
-> ✅ Kind clusters **persist** across Podman machine restarts and Windows reboots. You only need to run `kind create cluster` once. Simply start the machine and your cluster will be available again.
+> ✅ Kind clusters **persist** across Podman machine restarts and Windows reboots. You only need to run `kind create cluster` once. After starting the machine, start the Kind node container manually.
 
-### After a Windows Reboot
+### Check Kind Cluster Status
 
-The Podman machine stops on reboot. Just start it again — your Kind cluster and all workloads resume automatically:
+After starting the Podman machine, verify the Kind node container status:
 
 ```powershell
+# See all containers including stopped ones
+podman ps -a
+```
+
+Expected — node container is `Exited` after a machine restart:
+```
+CONTAINER ID  IMAGE                  STATUS    NAMES
+abc123        kindest/node:v1.36.1   Exited    kafka-lab-control-plane
+```
+
+Start the Kind node container:
+
+```powershell
+podman start kafka-lab-control-plane
+```
+
+Verify it is running:
+
+```powershell
+podman ps
+```
+
+### After a Windows Reboot — Full Recovery Sequence
+
+The Podman machine stops on reboot, the Kind node container exits, and all Kubernetes resources (Strimzi, Kafka, topics) are lost. Kind is designed for development and does not persist workloads across node restarts.
+
+#### Option A — Run the recovery script (recommended)
+
+Simply double-click **`recover-cluster.bat`** or run from PowerShell:
+
+```powershell
+.\recover-cluster.bat
+```
+
+The script handles all steps automatically — starts the machine, starts the Kind node, waits for readiness, redeploys Strimzi + Kafka + UI + topic, and prints the final status.
+
+#### Option B — Manual steps
+Follow this full sequence every time after a reboot:
+
+```powershell
+# ── Step 1: Start Podman machine ──────────────────────────────
 podman machine start
+
+# ── Step 2: Start the Kind node container (does not auto-start)
+podman start kafka-lab-control-plane
+
+# ── Step 3: Switch kubectl context ────────────────────────────
 kubectl config use-context kind-kafka-lab
+
+# ── Step 4: Verify node is Ready (wait ~30 seconds if needed) ─
 kubectl get nodes
+
+# ── Step 5: Recreate Kafka namespace ──────────────────────────
+kubectl apply -f kafka-namespace.yaml
+
+# ── Step 6: Install Strimzi Operator ──────────────────────────
+kubectl create -f https://strimzi.io/install/latest?namespace=kafka -n kafka
+
+# ── Step 7: Wait for Strimzi operator pod to be Running ───────
+kubectl get pods -n kafka -w
+# Press Ctrl+C once strimzi-cluster-operator-* shows Running
+
+# ── Step 8: Deploy Kafka cluster ──────────────────────────────
+kubectl apply -f kafka.yaml
+
+# ── Step 9: Deploy Kafka UI ───────────────────────────────────
+kubectl apply -f kafka-ui.yaml
+
+# ── Step 10: Deploy Kafka topic ───────────────────────────────
+kubectl apply -f kafka-topic.yaml
+
+# ── Step 11: Verify everything is up ──────────────────────────
+kubectl get kafka,kafkanodepool,kafkatopic,pods,svc,pvc -n kafka
+
+# ── Step 12: Access Kafka UI ──────────────────────────────────
+kubectl port-forward svc/kafka-ui 8080:8080 -n kafka
+# Then open: http://localhost:8080
 ```
+
+> ⚠️ **What persists vs what is lost after a reboot:**
+>
+> | Resource | Survives reboot? |
+> |----------|-----------------|
+> | Kind cluster existence | ✅ Yes |
+> | Strimzi Operator | ❌ No — redeploy |
+> | Kafka cluster | ❌ No — redeploy |
+> | Kafka UI | ❌ No — redeploy |
+> | Kafka Topics | ❌ No — redeploy |
+> | PVC data | ❌ No — lost with node |
 
 ### Delete the Kind Cluster
 
@@ -533,7 +621,8 @@ kubectl cluster-info
 | `kind` not recognized | Open a new terminal after `winget install` |
 | Podman machine won't start | Run `podman machine init` first |
 | `LoadBalancer` service stuck in `<pending>` | Use `kubectl port-forward` instead |
-| Kind cluster not reachable after reboot | Run `podman machine start` then `kubectl config use-context kind-kafka-lab` |
+| Kind cluster not reachable after reboot | Run `podman machine start` → `podman start kafka-lab-control-plane` → `kubectl config use-context kind-kafka-lab` |
+| Kind node container not running (`podman ps` empty) | Run `podman start kafka-lab-control-plane` |
 | Wrong kubectl context | Run `kubectl config use-context kind-kafka-lab` |
 | Images re-downloaded after cluster recreate | Expected — `kind delete cluster` removes the Kind node and its images |
 
