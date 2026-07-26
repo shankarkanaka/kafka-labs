@@ -13,6 +13,7 @@ Step-by-step guide to deploy Apache Kafka on Kubernetes using the [Strimzi Opera
 | File | Purpose |
 |------|---------|
 | `strimzi.txt` | Strimzi operator install output (reference) |
+| `kafka-namespace.yaml` | Kafka namespace definition |
 | `kafka.yaml` | Single-node Kafka cluster (KRaft, 10Gi storage) |
 | `kafka-ui.yaml` | Kafka UI web interface |
 | `kafka-topic.yaml` | Example topic with 10 partitions |
@@ -21,10 +22,16 @@ Step-by-step guide to deploy Apache Kafka on Kubernetes using the [Strimzi Opera
 
 ## Step 1: Create Namespace and Install Strimzi Operator
 
-Create the `kafka` namespace (if it does not exist):
+Create the `kafka` namespace using the resource file:
 
 ```bash
-kubectl create namespace kafka
+kubectl apply -f kafka-namespace.yaml
+```
+
+Verify:
+
+```bash
+kubectl get namespace kafka
 ```
 
 Install the Strimzi Cluster Operator using the official manifest:

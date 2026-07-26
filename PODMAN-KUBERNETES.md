@@ -175,6 +175,26 @@ NAME                      STATUS   ROLES           AGE   VERSION
 kafka-lab-control-plane   Ready    control-plane   2m    v1.36.x
 ```
 
+### Step 3 — Create the kafka namespace
+
+Use the namespace resource file (recommended over `kubectl create namespace`):
+
+```powershell
+kubectl apply -f kafka-namespace.yaml
+```
+
+Verify:
+
+```powershell
+kubectl get namespace kafka
+```
+
+Expected output:
+```
+NAME    STATUS   AGE
+kafka   Active   5s
+```
+
 ---
 
 ## Part 4: Manage the Kubernetes Cluster
